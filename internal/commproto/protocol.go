@@ -140,3 +140,45 @@ func makeDatagramFormat(datagramType DatagramType, version int, encoding Payload
 
 	return
 }
+
+// Extracts all information from the unencrypted parts of a datagram buffer.
+func GetDatagramPublicInformation(datagram []byte) (datagramType DatagramType, encoding PayloadEncoding, sourceAddress string, err error) {
+	if len(datagram) < 4 {
+		err = errors.New("datagram too short")
+		return 
+	}
+
+	switch datagram[0] {
+	case 'M':
+		datagramType = DatagramTypeMessage
+	case 'C':
+		datagramType = DatagramTypeCommand
+	default:
+		err = errors.New("unknown datagram type")
+		return
+	}
+
+	if datagram[1] != '0' {
+		err = errors.New("unknown version")
+		return
+	}
+
+	switch datagram[2] {
+	case 'B':
+		encoding = PayloadEncodingBinary
+	case 'J':
+		encoding = PayloadEncodingJSON
+	default:
+		err = errors.New("unknown payload encoding")
+		return
+	}
+
+	length := int(datagram[3])
+	if len(datagram) < 4 + length {
+		err = errors.New("invalid address length")
+		return
+	}
+
+	sourceAddress = string(datagram[4:4+length])
+	return
+}

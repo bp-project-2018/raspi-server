@@ -21,6 +21,24 @@ func TestMakeMessageDetails(t *testing.T) {
 	}
 }
 
+func TestGetDatagramPublicInformation(t *testing.T) {
+	datagram := decodeHex("4d304a066d617374657200420011001100110011001100110011001100304d3a268a1b62b8fa73b46b1338c78e3b6e70cf3ffa018cb6ba" +
+		"20053d9efd1bd85ec2500ecc4435a5b8636855dfbf2ac888aa424023b5f628fccd50d32663a6a10ac7eca3717acca2001a1947253ae7a4")
+	datagramType, encoding, sourceAddress, err := GetDatagramPublicInformation(datagram)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if datagramType != DatagramTypeMessage {
+		t.Fatal("wrong datagram type")
+	}
+	if encoding != PayloadEncodingJSON {
+		t.Fatal("wrong payload encoding")
+	}
+	if sourceAddress != "master" {
+		t.Fatalf("expected '%s', actual '%s'", "master", sourceAddress)
+	}
+}
+
 func decodeHex(source string) []byte {
 	result, err := hex.DecodeString(source)
 	if err != nil {
