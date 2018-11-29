@@ -1,4 +1,6 @@
 /cmd/protoclient/protoclient
 /cmd/protoclient/protoclient.exe
 
+*.sublime-workspace
+
 .DS_Store
