@@ -142,10 +142,10 @@ func makeDatagramFormat(datagramType DatagramType, version int, encoding Payload
 }
 
 // Extracts all information from the unencrypted parts of a datagram buffer.
-func GetDatagramPublicInformation(datagram []byte) (datagramType DatagramType, encoding PayloadEncoding, sourceAddress string, err error) {
+func GetDatagramPublicInformation(datagram []byte) (datagramType DatagramType, version int, encoding PayloadEncoding, sourceAddress string, err error) {
 	if len(datagram) < 4 {
 		err = errors.New("datagram too short")
-		return 
+		return
 	}
 
 	switch datagram[0] {
@@ -158,7 +158,10 @@ func GetDatagramPublicInformation(datagram []byte) (datagramType DatagramType, e
 		return
 	}
 
-	if datagram[1] != '0' {
+	switch datagram[1] {
+	case '0':
+		version = 0
+	default:
 		err = errors.New("unknown version")
 		return
 	}
@@ -174,11 +177,94 @@ func GetDatagramPublicInformation(datagram []byte) (datagramType DatagramType, e
 	}
 
 	length := int(datagram[3])
-	if len(datagram) < 4 + length {
+	if len(datagram) < 4+length {
 		err = errors.New("invalid address length")
 		return
 	}
 
-	sourceAddress = string(datagram[4:4+length])
+	sourceAddress = string(datagram[4 : 4+length])
+	return
+}
+
+// @Todo: Assumes well-formed data right now!!!
+func DecodeMessageWithDetails(datagram []byte, passphrase string, key []byte) (timestamp int32, payload []byte, err error) {
+	if len(key) != 16 {
+		panic("key has wrong length")
+	}
+
+	publicLength := 4 + int(datagram[3])
+
+	hmacLengthHigh := int(datagram[publicLength])
+	hmacLengthLow := int(datagram[publicLength+1])
+	hmacLength := (hmacLengthHigh << 8) + hmacLengthLow
+	hmacStart := publicLength + 2
+
+	var expectedMAC []byte
+	{ // Calculate MAC.
+		hash := hmac.New(sha256.New, []byte(passphrase))
+		hash.Write(datagram[hmacStart : hmacStart+hmacLength])
+		expectedMAC = hash.Sum(nil)
+	}
+
+	messageMAC := datagram[hmacStart+hmacLength : hmacStart+hmacLength+sha256.Size]
+
+	if len(datagram) != hmacStart+hmacLength+sha256.Size {
+		err = errors.New("invalid datagram")
+		return
+	}
+
+	if !hmac.Equal(messageMAC, expectedMAC) {
+		err = errors.New("invalid datagram")
+		return
+	}
+
+	iv := datagram[hmacStart : hmacStart+16]
+	aesLengthHigh := int(datagram[hmacStart+16])
+	aesLengthLow := int(datagram[hmacStart+17])
+	aesLength := (aesLengthHigh << 8) + aesLengthLow
+	aesStart := hmacStart + 16 + 2
+
+	{ // Decrypt data.
+		aesBuffer := datagram[aesStart : aesStart+aesLength]
+		block, aesErr := aes.NewCipher(key)
+		if aesErr != nil {
+			err = aesErr
+			return
+		}
+		mode := cipher.NewCBCDecrypter(block, iv)
+		mode.CryptBlocks(aesBuffer, aesBuffer) // decrypt in-place
+	}
+
+	var padding int
+	{ // Check padding.
+		padding = int(datagram[aesStart+aesLength-1])
+		if padding > aes.BlockSize {
+			err = errors.New("invalid datagram")
+			return
+		}
+		for i := 0; i < padding; i++ {
+			if int(datagram[aesStart+aesLength-i-1]) != padding {
+				err = errors.New("invalid datagram")
+				return
+			}
+		}
+	}
+
+	if !bytes.Equal(datagram[0:publicLength], datagram[aesStart:aesStart+publicLength]) {
+		err = errors.New("invalid datagram")
+		return
+	}
+
+	if aesStart+aesLength != hmacStart+hmacLength {
+		err = errors.New("invalid datagram")
+		return
+	}
+
+	timestamp += int32(datagram[aesStart+publicLength+0]) << 24
+	timestamp += int32(datagram[aesStart+publicLength+1]) << 16
+	timestamp += int32(datagram[aesStart+publicLength+2]) << 8
+	timestamp += int32(datagram[aesStart+publicLength+3]) << 0
+
+	payload = datagram[aesStart+publicLength+4 : aesStart+aesLength-padding]
 	return
 }
