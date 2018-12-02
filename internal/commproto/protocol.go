@@ -25,6 +25,61 @@ const (
 	PayloadEncodingJSON   PayloadEncoding = 1
 )
 
+type DatagramHeader struct {
+	Type          DatagramType
+	Version       int
+	Encoding      PayloadEncoding
+	SourceAddress string
+}
+
+// Returns the length in bytes of the header when encoded using the Encode() function.
+func (d *DatagramHeader) Len() int {
+	// 3 bytes for the format, 1 for the length of the address and the length of the address itself.
+	return 3 + 1 + len(d.SourceAddress)
+}
+
+func (d *DatagramHeader) Encode() []byte {
+	var result bytes.Buffer
+
+	// Reserve space.
+	result.Grow(d.Len())
+
+	switch d.Type {
+	case DatagramTypeMessage:
+		result.WriteByte('M')
+	case DatagramTypeCommand:
+		result.WriteByte('C')
+	default:
+		panic(fmt.Sprintf("invalid datagram type: %d", d.Type))
+	}
+
+	if d.Version < 0 {
+		panic(fmt.Sprintf("invalid datagram version: %d", d.Version))
+	}
+	if d.Version >= 10 {
+		panic(fmt.Sprintf("datagram version too big to encode using current format: %d", d.Version))
+	}
+	result.WriteByte(byte('0' + d.Version))
+
+	switch d.Encoding {
+	case PayloadEncodingBinary:
+		result.WriteByte('B')
+	case PayloadEncodingJSON:
+		result.WriteByte('J')
+	default:
+		panic(fmt.Sprintf("invalid payload encoding: %d", d.Encoding))
+	}
+
+	length := len(d.SourceAddress)
+	if length > math.MaxUint8 {
+		panic("address too long")
+	}
+	result.WriteByte(byte(length))
+	result.WriteString(d.SourceAddress)
+
+	return result.Bytes()
+}
+
 func MakeMessageWithDetails(sourceAddress string, passphrase string, key []byte, iv []byte, timestamp int32, encoding PayloadEncoding, payload []byte) ([]byte, error) {
 	if len(key) != 16 {
 		panic("key has wrong length")
@@ -34,12 +89,17 @@ func MakeMessageWithDetails(sourceAddress string, passphrase string, key []byte,
 		panic("iv has wrong length")
 	}
 
-	format := makeDatagramFormat(DatagramTypeMessage, 0, encoding)
+	header := DatagramHeader{
+		Type:          DatagramTypeMessage,
+		Version:       0,
+		Encoding:      encoding,
+		SourceAddress: sourceAddress,
+	}
+	headerBuffer := header.Encode()
 
 	var aesBuffer bytes.Buffer
 	{ // Write plaintext.
-		aesBuffer.Write(format[:])
-		writeAddress(&aesBuffer, sourceAddress)
+		aesBuffer.Write(headerBuffer)
 		aesBuffer.WriteByte(byte(timestamp >> 24))
 		aesBuffer.WriteByte(byte(timestamp >> 16))
 		aesBuffer.WriteByte(byte(timestamp >> 8))
@@ -90,8 +150,7 @@ func MakeMessageWithDetails(sourceAddress string, passphrase string, key []byte,
 
 	var datagramBuffer bytes.Buffer
 	{ // Write final datagram.
-		datagramBuffer.Write(format[:])
-		writeAddress(&datagramBuffer, sourceAddress)
+		datagramBuffer.Write(headerBuffer)
 		datagramBuffer.WriteByte(byte(hmacLength >> 8))
 		datagramBuffer.WriteByte(byte(hmacLength >> 0))
 		datagramBuffer.Write(hmacBuffer.Bytes())
@@ -99,46 +158,6 @@ func MakeMessageWithDetails(sourceAddress string, passphrase string, key []byte,
 	}
 
 	return datagramBuffer.Bytes(), nil
-}
-
-func writeAddress(buffer *bytes.Buffer, address string) {
-	length := len(address)
-	if length > math.MaxUint8 {
-		panic("address too long")
-	}
-	buffer.WriteByte(byte(length))
-	buffer.WriteString(address)
-}
-
-func makeDatagramFormat(datagramType DatagramType, version int, encoding PayloadEncoding) (format [3]byte) {
-	switch datagramType {
-	case DatagramTypeMessage:
-		format[0] = 'M'
-	case DatagramTypeCommand:
-		format[0] = 'C'
-	default:
-		panic(fmt.Sprintf("invalid datagram type: %d", datagramType))
-	}
-
-	if version < 0 {
-		panic(fmt.Sprintf("invalid datagram version: %d", version))
-	}
-	if version >= 10 {
-		panic(fmt.Sprintf("datagram version too big to encode using current format: %d", version))
-	}
-
-	format[1] = byte('0' + version)
-
-	switch encoding {
-	case PayloadEncodingBinary:
-		format[2] = 'B'
-	case PayloadEncodingJSON:
-		format[2] = 'J'
-	default:
-		panic(fmt.Sprintf("invalid payload encoding: %d", encoding))
-	}
-
-	return
 }
 
 // Extracts all information from the unencrypted parts of a datagram buffer.
