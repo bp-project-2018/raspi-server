@@ -80,6 +80,48 @@ func (d *DatagramHeader) Encode() []byte {
 	return result.Bytes()
 }
 
+// Extracts the header from the unencrypted parts of a datagram buffer.
+func ExtractPublicHeader(datagram []byte) (*DatagramHeader, error) {
+	if len(datagram) < 4 {
+		return nil, errors.New("datagram too short")
+	}
+
+	var header DatagramHeader
+
+	switch datagram[0] {
+	case 'M':
+		header.Type = DatagramTypeMessage
+	case 'C':
+		header.Type = DatagramTypeCommand
+	default:
+		return nil, errors.New("unknown datagram type")
+	}
+
+	switch datagram[1] {
+	case '0':
+		header.Version = 0
+	default:
+		return nil, errors.New("unknown version")
+	}
+
+	switch datagram[2] {
+	case 'B':
+		header.Encoding = PayloadEncodingBinary
+	case 'J':
+		header.Encoding = PayloadEncodingJSON
+	default:
+		return nil, errors.New("unknown payload encoding")
+	}
+
+	length := int(datagram[3])
+	if len(datagram) < 4+length {
+		return nil, errors.New("invalid address length")
+	}
+	header.SourceAddress = string(datagram[4 : 4+length])
+
+	return &header, nil
+}
+
 func MakeMessageWithDetails(sourceAddress string, passphrase string, key []byte, iv []byte, timestamp int32, encoding PayloadEncoding, payload []byte) ([]byte, error) {
 	if len(key) != 16 {
 		panic("key has wrong length")
@@ -158,51 +200,6 @@ func MakeMessageWithDetails(sourceAddress string, passphrase string, key []byte,
 	}
 
 	return datagramBuffer.Bytes(), nil
-}
-
-// Extracts all information from the unencrypted parts of a datagram buffer.
-func GetDatagramPublicInformation(datagram []byte) (datagramType DatagramType, version int, encoding PayloadEncoding, sourceAddress string, err error) {
-	if len(datagram) < 4 {
-		err = errors.New("datagram too short")
-		return
-	}
-
-	switch datagram[0] {
-	case 'M':
-		datagramType = DatagramTypeMessage
-	case 'C':
-		datagramType = DatagramTypeCommand
-	default:
-		err = errors.New("unknown datagram type")
-		return
-	}
-
-	switch datagram[1] {
-	case '0':
-		version = 0
-	default:
-		err = errors.New("unknown version")
-		return
-	}
-
-	switch datagram[2] {
-	case 'B':
-		encoding = PayloadEncodingBinary
-	case 'J':
-		encoding = PayloadEncodingJSON
-	default:
-		err = errors.New("unknown payload encoding")
-		return
-	}
-
-	length := int(datagram[3])
-	if len(datagram) < 4+length {
-		err = errors.New("invalid address length")
-		return
-	}
-
-	sourceAddress = string(datagram[4 : 4+length])
-	return
 }
 
 // @Todo: Assumes well-formed data right now!!!
