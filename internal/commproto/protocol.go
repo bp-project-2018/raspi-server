@@ -122,7 +122,11 @@ func ExtractPublicHeader(datagram []byte) (*DatagramHeader, error) {
 	return &header, nil
 }
 
-func MakeMessageWithDetails(sourceAddress string, passphrase string, key []byte, iv []byte, timestamp int32, encoding PayloadEncoding, payload []byte) ([]byte, error) {
+// Creates a datagram from the given data using the provided encryption secrets.
+//
+// The length of the fixedPayload must be deducible from the datagram header to
+// be able to disassemble the datagram correctly.
+func AssembleDatagram(header *DatagramHeader, fixedPayload []byte, variablePayload []byte, key []byte, iv []byte, passphrase string) ([]byte, error) {
 	if len(key) != 16 {
 		panic("key has wrong length")
 	}
@@ -131,22 +135,13 @@ func MakeMessageWithDetails(sourceAddress string, passphrase string, key []byte,
 		panic("iv has wrong length")
 	}
 
-	header := DatagramHeader{
-		Type:          DatagramTypeMessage,
-		Version:       0,
-		Encoding:      encoding,
-		SourceAddress: sourceAddress,
-	}
 	headerBuffer := header.Encode()
 
 	var aesBuffer bytes.Buffer
 	{ // Write plaintext.
 		aesBuffer.Write(headerBuffer)
-		aesBuffer.WriteByte(byte(timestamp >> 24))
-		aesBuffer.WriteByte(byte(timestamp >> 16))
-		aesBuffer.WriteByte(byte(timestamp >> 8))
-		aesBuffer.WriteByte(byte(timestamp >> 0))
-		aesBuffer.Write(payload)
+		aesBuffer.Write(fixedPayload)
+		aesBuffer.Write(variablePayload)
 	}
 
 	{ // Add PKCS#7 padding.
@@ -159,15 +154,14 @@ func MakeMessageWithDetails(sourceAddress string, passphrase string, key []byte,
 	{ // Encrypt buffer.
 		block, err := aes.NewCipher(key)
 		if err != nil {
-			return nil, err
+			panic(err)
 		}
 		mode := cipher.NewCBCEncrypter(block, iv)
 		mode.CryptBlocks(aesBuffer.Bytes(), aesBuffer.Bytes()) // encrypt aesBuffer in-place
 	}
 
-	aesLength := aesBuffer.Len()
 	{ // Check payload length.
-		expectedHmacLength := 16 + 2 + aesLength // iv + aes ciphertext size + aes ciphertext
+		expectedHmacLength := 16 + 2 + aesBuffer.Len() // iv + aes ciphertext size + aes ciphertext
 		if expectedHmacLength > math.MaxUint16 {
 			return nil, errors.New("payload too long")
 		}
@@ -176,12 +170,10 @@ func MakeMessageWithDetails(sourceAddress string, passphrase string, key []byte,
 	var hmacBuffer bytes.Buffer
 	{ // Write HMAC message.
 		hmacBuffer.Write(iv)
-		hmacBuffer.WriteByte(byte(aesLength >> 8))
-		hmacBuffer.WriteByte(byte(aesLength >> 0))
+		hmacBuffer.WriteByte(byte(aesBuffer.Len() >> 8))
+		hmacBuffer.WriteByte(byte(aesBuffer.Len() >> 0))
 		hmacBuffer.Write(aesBuffer.Bytes())
 	}
-
-	hmacLength := hmacBuffer.Len()
 
 	var mac []byte
 	{ // Calculate MAC.
@@ -193,8 +185,8 @@ func MakeMessageWithDetails(sourceAddress string, passphrase string, key []byte,
 	var datagramBuffer bytes.Buffer
 	{ // Write final datagram.
 		datagramBuffer.Write(headerBuffer)
-		datagramBuffer.WriteByte(byte(hmacLength >> 8))
-		datagramBuffer.WriteByte(byte(hmacLength >> 0))
+		datagramBuffer.WriteByte(byte(hmacBuffer.Len() >> 8))
+		datagramBuffer.WriteByte(byte(hmacBuffer.Len() >> 0))
 		datagramBuffer.Write(hmacBuffer.Bytes())
 		datagramBuffer.Write(mac)
 	}
@@ -202,31 +194,62 @@ func MakeMessageWithDetails(sourceAddress string, passphrase string, key []byte,
 	return datagramBuffer.Bytes(), nil
 }
 
-// @Todo: Assumes well-formed data right now!!!
-func DecodeMessageWithDetails(datagram []byte, passphrase string, key []byte) (timestamp int32, payload []byte, err error) {
+// Validates and decrypts a datagram using the provided encryption secrets.
+func DisassembleDatagram(datagram []byte, header *DatagramHeader, fixedPayloadLength int, key []byte, passphrase string) (fixedPayload []byte, variablePayload []byte, err error) {
 	if len(key) != 16 {
 		panic("key has wrong length")
 	}
 
-	publicLength := 4 + int(datagram[3])
+	remainder := datagram
 
-	hmacLengthHigh := int(datagram[publicLength])
-	hmacLengthLow := int(datagram[publicLength+1])
-	hmacLength := (hmacLengthHigh << 8) + hmacLengthLow
-	hmacStart := publicLength + 2
-
-	var expectedMAC []byte
-	{ // Calculate MAC.
-		hash := hmac.New(sha256.New, []byte(passphrase))
-		hash.Write(datagram[hmacStart : hmacStart+hmacLength])
-		expectedMAC = hash.Sum(nil)
+	{ // Skip the header.
+		// The header must fit the data, so we do not need to check the length
+		// here, as this has already happened in ExtractPublicHeader.
+		remainder = remainder[header.Len():]
 	}
 
-	messageMAC := datagram[hmacStart+hmacLength : hmacStart+hmacLength+sha256.Size]
+	var hmacLength int
+	{ // Extract hmac content length.
+		if len(remainder) < 2 {
+			err = errors.New("invalid datagram")
+			return
+		}
+		high, low := int(remainder[0]), int(remainder[1])
+		hmacLength = (high << 8) + low
+		remainder = remainder[2:]
+	}
 
-	if len(datagram) != hmacStart+hmacLength+sha256.Size {
+	var hmacContent []byte
+	{ // Save hmac content for later.
+		if len(remainder) < hmacLength {
+			err = errors.New("invalid datagram")
+			return
+		}
+		hmacContent = remainder[:hmacLength]
+		remainder = remainder[hmacLength:]
+	}
+
+	var messageMAC []byte
+	{ // Extract MAC stored in datagram.
+		if len(remainder) < sha256.Size {
+			err = errors.New("invalid datagram")
+			return
+		}
+		messageMAC = remainder[:sha256.Size]
+		remainder = remainder[sha256.Size:]
+	}
+
+	if len(remainder) != 0 {
+		// More data in datagram than expected.
 		err = errors.New("invalid datagram")
 		return
+	}
+
+	var expectedMAC []byte
+	{ // Calculate MAC of received data.
+		hash := hmac.New(sha256.New, []byte(passphrase))
+		hash.Write(hmacContent)
+		expectedMAC = hash.Sum(nil)
 	}
 
 	if !hmac.Equal(messageMAC, expectedMAC) {
@@ -234,53 +257,92 @@ func DecodeMessageWithDetails(datagram []byte, passphrase string, key []byte) (t
 		return
 	}
 
-	iv := datagram[hmacStart : hmacStart+16]
-	aesLengthHigh := int(datagram[hmacStart+16])
-	aesLengthLow := int(datagram[hmacStart+17])
-	aesLength := (aesLengthHigh << 8) + aesLengthLow
-	aesStart := hmacStart + 16 + 2
+	// Disassemble hmacContent now.
+	remainder = hmacContent
 
-	{ // Decrypt data.
-		aesBuffer := datagram[aesStart : aesStart+aesLength]
-		block, aesErr := aes.NewCipher(key)
-		if aesErr != nil {
-			err = aesErr
+	var iv []byte
+	{ // Extract initialization vector.
+		if len(remainder) < 16 {
+			err = errors.New("invalid datagram")
 			return
 		}
+		iv = remainder[:16]
+		remainder = remainder[16:]
+	}
+
+	var aesLength int
+	{ // Extract aes content length.
+		if len(remainder) < 2 {
+			err = errors.New("invalid datagram")
+			return
+		}
+		high, low := int(remainder[0]), int(remainder[1])
+		aesLength = (high << 8) + low
+		remainder = remainder[2:]
+	}
+
+	// We expect at least one block of data because of padding.
+	// Also, the length must be a multiple of the block size.
+	if aesLength < aes.BlockSize || aesLength%aes.BlockSize != 0 {
+		err = errors.New("invalid datagram")
+		return
+	}
+
+	var aesContent []byte
+	{
+		if len(remainder) < aesLength {
+			err = errors.New("invalid datagram")
+			return
+		}
+		aesContent = remainder[:aesLength]
+		remainder = remainder[aesLength:]
+	}
+
+	if len(remainder) != 0 {
+		// More data in hmac content than expected.
+		err = errors.New("invalid datagram")
+		return
+	}
+
+	{ // Decrypt data.
+		block, aesErr := aes.NewCipher(key)
+		if aesErr != nil {
+			panic(aesErr)
+		}
 		mode := cipher.NewCBCDecrypter(block, iv)
-		mode.CryptBlocks(aesBuffer, aesBuffer) // decrypt in-place
+		mode.CryptBlocks(aesContent, aesContent) // decrypt in-place
 	}
 
 	var padding int
 	{ // Check padding.
-		padding = int(datagram[aesStart+aesLength-1])
+		// Accesses in this block are safe, because of the check directly after
+		// the length has been extracted.
+		padding = int(aesContent[aesLength-1])
 		if padding > aes.BlockSize {
 			err = errors.New("invalid datagram")
 			return
 		}
 		for i := 0; i < padding; i++ {
-			if int(datagram[aesStart+aesLength-i-1]) != padding {
+			if int(aesContent[aesLength-i-1]) != padding {
 				err = errors.New("invalid datagram")
 				return
 			}
 		}
 	}
 
-	if !bytes.Equal(datagram[0:publicLength], datagram[aesStart:aesStart+publicLength]) {
+	// Check that the decrypted data is long enough.
+	if aesLength-padding < header.Len()+fixedPayloadLength {
 		err = errors.New("invalid datagram")
 		return
 	}
 
-	if aesStart+aesLength != hmacStart+hmacLength {
+	// Make sure the public header has not been tampered with.
+	if !bytes.Equal(datagram[:header.Len()], aesContent[:header.Len()]) {
 		err = errors.New("invalid datagram")
 		return
 	}
 
-	timestamp += int32(datagram[aesStart+publicLength+0]) << 24
-	timestamp += int32(datagram[aesStart+publicLength+1]) << 16
-	timestamp += int32(datagram[aesStart+publicLength+2]) << 8
-	timestamp += int32(datagram[aesStart+publicLength+3]) << 0
-
-	payload = datagram[aesStart+publicLength+4 : aesStart+aesLength-padding]
+	fixedPayload = aesContent[header.Len() : header.Len()+fixedPayloadLength]
+	variablePayload = aesContent[header.Len()+fixedPayloadLength : aesLength-padding]
 	return
 }

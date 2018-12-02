@@ -50,12 +50,19 @@ func TestExtractPublicHeader(t *testing.T) {
 	}
 }
 
-func TestMakeMessageDetails(t *testing.T) {
+func TestAssembleDatagram(t *testing.T) {
+	header := DatagramHeader{
+		Type:          DatagramTypeMessage,
+		Version:       0,
+		Encoding:      PayloadEncodingJSON,
+		SourceAddress: "master",
+	}
+	variablePayload := []byte{0x00, 0x11, 0x22, 0x33}
+	fixedPayload := []byte(`{ value: "Hello, Sailor!" }`)
 	key := decodeHex("00112233445566778899aabbccddeeff")
 	iv := decodeHex("00110011001100110011001100110011")
-	payload := []byte(`{ value: "Hello, Sailor!" }`)
 
-	result, err := MakeMessageWithDetails("master", "passphrase", key, iv, 0x00112233, PayloadEncodingJSON, payload)
+	result, err := AssembleDatagram(&header, variablePayload, fixedPayload, key, iv, "passphrase")
 
 	expected := decodeHex("4d304a066d617374657200420011001100110011001100110011001100304d3a268a1b62b8fa73b46b1338c78e3b6e70cf3ffa018cb6ba" +
 		"20053d9efd1bd85ec2500ecc4435a5b8636855dfbf2ac888aa424023b5f628fccd50d32663a6a10ac7eca3717acca2001a1947253ae7a4")
@@ -67,23 +74,29 @@ func TestMakeMessageDetails(t *testing.T) {
 	}
 }
 
-func TestDecodeMessageWithDetails(t *testing.T) {
-	key := decodeHex("00112233445566778899aabbccddeeff")
+func TestDisassembleDatagram(t *testing.T) {
 	datagram := decodeHex("4d304a066d617374657200420011001100110011001100110011001100304d3a268a1b62b8fa73b46b1338c78e3b6e70cf3ffa018cb6ba" +
 		"20053d9efd1bd85ec2500ecc4435a5b8636855dfbf2ac888aa424023b5f628fccd50d32663a6a10ac7eca3717acca2001a1947253ae7a4")
+	header := DatagramHeader{
+		Type:          DatagramTypeMessage,
+		Version:       0,
+		Encoding:      PayloadEncodingJSON,
+		SourceAddress: "master",
+	}
+	key := decodeHex("00112233445566778899aabbccddeeff")
 
-	timestamp, payload, err := DecodeMessageWithDetails(datagram, "passphrase", key)
+	fixed, variable, err := DisassembleDatagram(datagram, &header, 4, key, "passphrase")
 
-	expectedTimestamp := int32(0x00112233)
-	expectedPayload := `{ value: "Hello, Sailor!" }`
+	expectedFixed := []byte{0x00, 0x11, 0x22, 0x33}
+	expectedVariable := `{ value: "Hello, Sailor!" }`
 	if err != nil {
 		t.Fatal(err)
 	}
-	if timestamp != expectedTimestamp {
-		t.Fatalf("expected %08x, actual %08x", expectedTimestamp, timestamp)
+	if !bytes.Equal(fixed, expectedFixed) {
+		t.Fatalf("expected %08x, actual %08x", expectedFixed, fixed)
 	}
-	if string(payload) != expectedPayload {
-		t.Fatalf("expected '%s', actual '%s'", expectedPayload, string(payload))
+	if string(variable) != expectedVariable {
+		t.Fatalf("expected '%s', actual '%s'", expectedVariable, string(variable))
 	}
 }
 
