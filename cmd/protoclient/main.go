@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	_ "github.com/iot-bp-project-2018/raspi-server/internal/commproto"
+	_ "github.com/iot-bp-project-2018/raspi-server/internal/mqttclient"
 )
 
 func main() {
