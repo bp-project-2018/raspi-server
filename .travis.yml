@@ -1,11 +1,14 @@
 language: go
 go:
     - 1.11.x
-script:
-    - go test -v
-    - go build
 env:
     global:
+        - GOOS=linux
+        - GOARCH=arm
+script:
+    - cd cmd/protoclient
+    - go test -v
+    - go build
 notifications:
     on_success: never
     on_failure: never
