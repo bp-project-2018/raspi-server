@@ -1,0 +1,11 @@
+language: go
+go:
+    - 1.11.x
+script:
+    - go test -v
+    - go build
+env:
+    global:
+notifications:
+    on_success: never
+    on_failure: never
