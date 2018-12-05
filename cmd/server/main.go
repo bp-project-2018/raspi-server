@@ -1,3 +1,6 @@
+// Package server provides the central executable of the project, responsible
+// for receiving data from and sending commands to the sensors, storing the
+// data, serving the webinterface and providing an API for it.
 package main
 
 import (

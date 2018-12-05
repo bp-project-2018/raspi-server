@@ -1,4 +1,5 @@
-// protoclient is a command line tool used to encrypt / decrypt and send / receive messages using the communication protocol.
+// Package protoclient provides a command line tool used to encrypt / decrypt
+// and send / receive messages using the communication protocol.
 package main
 
 import (

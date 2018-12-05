@@ -1,5 +1,7 @@
 package commproto
 
+// This file handles the encoding and decoding of individual datagrams.
+
 import (
 	"bytes"
 	"crypto/aes"
@@ -32,9 +34,11 @@ type DatagramHeader struct {
 	SourceAddress string
 }
 
-// Returns the length in bytes of the header when encoded using the Encode() function.
+// Len returns the length in bytes of the header when encoded using the Encode()
+// function.
 func (d *DatagramHeader) Len() int {
-	// 3 bytes for the format, 1 for the length of the address and the length of the address itself.
+	// 3 bytes for the format, 1 for the length of the address and the length of
+	// the address itself.
 	return 3 + 1 + len(d.SourceAddress)
 }
 
@@ -80,7 +84,8 @@ func (d *DatagramHeader) Encode() []byte {
 	return result.Bytes()
 }
 
-// Extracts the header from the unencrypted parts of a datagram buffer.
+// ExtractPublicHeader extracts the header from the unencrypted parts of a
+// datagram buffer.
 func ExtractPublicHeader(datagram []byte) (*DatagramHeader, error) {
 	if len(datagram) < 4 {
 		return nil, errors.New("datagram too short")
@@ -122,7 +127,8 @@ func ExtractPublicHeader(datagram []byte) (*DatagramHeader, error) {
 	return &header, nil
 }
 
-// Creates a datagram from the given data using the provided encryption secrets.
+// AssembleDatagram creates a datagram from the given data using the provided
+// encryption secrets.
 //
 // The length of the fixedPayload must be deducible from the datagram header to
 // be able to disassemble the datagram correctly.
@@ -194,7 +200,8 @@ func AssembleDatagram(header *DatagramHeader, fixedPayload []byte, variablePaylo
 	return datagramBuffer.Bytes(), nil
 }
 
-// Validates and decrypts a datagram using the provided encryption secrets.
+// DisassembleDatagram validates and decrypts a datagram using the provided
+// encryption secrets.
 func DisassembleDatagram(datagram []byte, header *DatagramHeader, fixedPayloadLength int, key []byte, passphrase string) (fixedPayload []byte, variablePayload []byte, err error) {
 	if len(key) != 16 {
 		panic("key has wrong length")

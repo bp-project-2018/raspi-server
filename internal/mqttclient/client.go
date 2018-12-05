@@ -1,3 +1,5 @@
+// This package provides an MQTT-based implentation of a PubSubClient for the
+// commproto package.
 package mqttclient
 
 import (
@@ -26,8 +28,8 @@ type mqttClient struct {
 	connected     bool
 }
 
-// NewMQTTClientWithServer configures a new MQTT client using the specified server and a client ID
-// generated from the hostname.
+// NewMQTTClientWithServer configures a new MQTT client using the specified
+// server and a client ID generated from the hostname.
 func NewMQTTClientWithServer(server string) commproto.PubSubClient {
 	options := mqtt.NewClientOptions()
 	options.AddBroker(server)
@@ -39,7 +41,8 @@ func getClientID() string {
 	hostname, _ := os.Hostname()
 	clientID := fmt.Sprintf("%s%d", hostname, time.Now().Unix())
 
-	// According to the MQTT v3.1 specification, a client id mus be no longer than 23 characters.
+	// According to the MQTT v3.1 specification, a client id mus be no longer
+	// than 23 characters.
 	if len(clientID) > 23 {
 		return clientID[:23]
 	}
@@ -47,7 +50,8 @@ func getClientID() string {
 	return clientID
 }
 
-// NewMQTTClientWithOptions configures a new MQTT client using the provided options.
+// NewMQTTClientWithOptions configures a new MQTT client using the provided
+// options.
 func NewMQTTClientWithOptions(options *mqtt.ClientOptions) commproto.PubSubClient {
 	c := new(mqttClient)
 
