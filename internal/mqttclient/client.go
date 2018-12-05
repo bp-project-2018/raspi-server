@@ -26,7 +26,7 @@ type mqttClient struct {
 	connected     bool
 }
 
-// Configures a new MQTT client using the specified server and a client ID
+// NewMQTTClientWithServer configures a new MQTT client using the specified server and a client ID
 // generated from the hostname.
 func NewMQTTClientWithServer(server string) commproto.PubSubClient {
 	options := mqtt.NewClientOptions()
@@ -47,7 +47,7 @@ func getClientID() string {
 	return clientID
 }
 
-// Configures a new MQTT client using the provided options.
+// NewMQTTClientWithOptions configures a new MQTT client using the provided options.
 func NewMQTTClientWithOptions(options *mqtt.ClientOptions) commproto.PubSubClient {
 	c := new(mqttClient)
 
