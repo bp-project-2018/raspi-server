@@ -1,4 +1,4 @@
-package commproto
+package main
 
 import (
 	"encoding/json"
