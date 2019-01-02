@@ -1,0 +1,17 @@
+{
+	"host-addr": "shredder",
+	"time-server": {
+		"addr": "public",
+		"passphrase": "Ein Idiot in Uniform ist immer noch ein Idiot."
+	},
+	"partners": {
+		"kronos": {
+			"key": "e8c4e4830a9cfc1b05bed9a2f5590810",
+			"passphrase": "Unfortunately, there's a radio connected to my brain."
+		},
+		"kalliope": {
+			"key": "04801ce16b945ab05986dcf94dc82c2f",
+			"passphrase": "There are 69,105 leaves in a pile."
+		}
+	}
+}
