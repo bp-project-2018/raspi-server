@@ -353,3 +353,59 @@ func DisassembleDatagram(datagram []byte, header *DatagramHeader, fixedPayloadLe
 	variablePayload = aesContent[header.Len()+fixedPayloadLength : aesLength-padding]
 	return
 }
+
+func AssembleTime(time int32, passphrase string) []byte {
+	var buffer bytes.Buffer
+
+	length := 4
+	buffer.WriteByte(byte(length >> 8))
+	buffer.WriteByte(byte(length >> 0))
+
+	buffer.WriteByte(byte(time >> 24))
+	buffer.WriteByte(byte(time >> 16))
+	buffer.WriteByte(byte(time >> 8))
+	buffer.WriteByte(byte(time >> 0))
+
+	var mac []byte
+	{ // Calculate MAC.
+		hash := hmac.New(sha256.New, []byte(passphrase))
+		hash.Write(buffer.Bytes()[2 : 2+length])
+		mac = hash.Sum(nil)
+	}
+
+	buffer.Write(mac)
+	return buffer.Bytes()
+}
+
+func DisassembleTime(data []byte, passphrase string) (int32, error) {
+	if len(data) != 2+4+sha256.Size /* length, payload, mac */ {
+		return 0, errors.New("invalid datagram")
+	}
+
+	high, low := int(data[0]), int(data[1])
+	length := high<<8 + low
+	if length != 4 {
+		return 0, errors.New("invalid datagram")
+	}
+
+	messageMAC := data[2+4:]
+
+	var expectedMAC []byte
+	{ // Calculate MAC of received data.
+		hash := hmac.New(sha256.New, []byte(passphrase))
+		hash.Write(data[2 : 2+length])
+		expectedMAC = hash.Sum(nil)
+	}
+
+	if !hmac.Equal(messageMAC, expectedMAC) {
+		return 0, errors.New("invalid datagram")
+	}
+
+	time := int32(0)
+	time += int32(data[2]) << 24
+	time += int32(data[3]) << 16
+	time += int32(data[4]) << 8
+	time += int32(data[5]) << 0
+
+	return time, nil
+}
