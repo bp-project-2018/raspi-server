@@ -357,6 +357,8 @@ func DisassembleDatagram(datagram []byte, header *DatagramHeader, fixedPayloadLe
 func AssembleTime(time int32, passphrase string) []byte {
 	var buffer bytes.Buffer
 
+	// @Todo: Length is not really needed, as this a fixed size datagram, but
+	// this has to be defined in the specification first.
 	length := 4
 	buffer.WriteByte(byte(length >> 8))
 	buffer.WriteByte(byte(length >> 0))

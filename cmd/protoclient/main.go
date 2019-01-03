@@ -7,11 +7,14 @@ import (
 	"fmt"
 
 	"github.com/iot-bp-project-2018/raspi-server/internal/commproto"
-	_ "github.com/iot-bp-project-2018/raspi-server/internal/mqttclient"
+	"github.com/iot-bp-project-2018/raspi-server/internal/mqttclient"
+	log "github.com/sirupsen/logrus"
 )
 
 var (
-	configFlag = flag.String("config", "", "load configuration from `file`")
+	configFlag  = flag.String("config", "", "load configuration from `file`")
+	mqttFlag    = flag.String("mqtt", ":1883", "MQTT broker URI (format is scheme://host:port)")
+	verboseFlag = flag.Bool("verbose", false, "enable detailed logging")
 )
 
 func main() {
@@ -22,12 +25,23 @@ func main() {
 		return
 	}
 
+	if *verboseFlag {
+		log.SetLevel(log.DebugLevel)
+	}
+
 	config, err := commproto.ParseConfiguration(*configFlag)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 
-	fmt.Println("Hello, Sailor!")
-	fmt.Println(config)
+	ps := mqttclient.NewMQTTClientWithServer(*mqttFlag)
+
+	if config.TimeServer != nil {
+		server := commproto.NewTimeServer(*config.TimeServer, ps)
+		go server.Run()
+	}
+
+	// Block indefinitely.
+	select {}
 }
