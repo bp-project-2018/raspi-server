@@ -42,6 +42,15 @@
 			"windows": {
 				"shell_cmd": "cmd /C \"set GOOS=linux&set GOARCH=arm&go build\" && bash -c \"rsync -rtv server pi@kronos.local:\" || exit /b 0"
 			}
+		},
+		{
+			"name": "Package and Upload protoclient",
+			"working_dir": "$project_path/cmd/protoclient",
+			"shell_cmd": "env GOOS=linux GOARCH=arm go build && rsync -rtv protoclient pi@kronos.local: || exit 0",
+			"file_regex": "^(.+?):(\\d+?):(\\d+)?: (.+)$",
+			"windows": {
+				"shell_cmd": "cmd /C \"set GOOS=linux&set GOARCH=arm&go build\" && bash -c \"rsync -rtv protoclient pi@kronos.local:\" || exit /b 0"
+			}
 		}
 	]
 }
