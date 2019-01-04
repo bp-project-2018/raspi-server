@@ -57,12 +57,12 @@ func TestAssembleDatagram(t *testing.T) {
 		Encoding:      PayloadEncodingJSON,
 		SourceAddress: "master",
 	}
-	variablePayload := []byte{0x00, 0x11, 0x22, 0x33}
-	fixedPayload := []byte(`{ value: "Hello, Sailor!" }`)
+	fixedPayload := []byte{0x00, 0x11, 0x22, 0x33}
+	variablePayload := []byte(`{ value: "Hello, Sailor!" }`)
 	key := decodeHex("00112233445566778899aabbccddeeff")
 	iv := decodeHex("00110011001100110011001100110011")
 
-	result, err := AssembleDatagram(&header, variablePayload, fixedPayload, key, iv, "passphrase")
+	result, err := AssembleDatagram(&header, fixedPayload, variablePayload, key, iv, "passphrase")
 
 	expected := decodeHex("4d304a066d617374657200420011001100110011001100110011001100304d3a268a1b62b8fa73b46b1338c78e3b6e70cf3ffa018cb6ba" +
 		"20053d9efd1bd85ec2500ecc4435a5b8636855dfbf2ac888aa424023b5f628fccd50d32663a6a10ac7eca3717acca2001a1947253ae7a4")

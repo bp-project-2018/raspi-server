@@ -3,6 +3,7 @@ package commproto
 // This file manages the flow of datagrams.
 
 import (
+	"crypto/rand"
 	"fmt"
 	"sync"
 	"time"
@@ -65,6 +66,66 @@ func (client *Client) Start() {
 	if client.timeClient != nil {
 		client.timeClient.Start()
 	}
+}
+
+func (client *Client) SendString(receiver string, datagramType DatagramType, data string) error {
+	return client.Send(receiver, datagramType, PayloadEncodingUTF8, []byte(data))
+}
+
+func (client *Client) SendBytes(receiver string, datagramType DatagramType, data []byte) error {
+	return client.Send(receiver, datagramType, PayloadEncodingBinary, data)
+}
+
+func (client *Client) Send(receiver string, datagramType DatagramType, encoding PayloadEncoding, data []byte) error {
+	receiverConfig, ok := client.config.Partners[receiver]
+	if !ok {
+		return fmt.Errorf("unknown receiver: %s", receiver)
+	}
+
+	switch datagramType {
+	case DatagramTypeMessage:
+		header := DatagramHeader{
+			Type:          datagramType,
+			Version:       0,
+			Encoding:      encoding,
+			SourceAddress: client.config.HostAddress,
+		}
+		timestamp := int32(time.Now().Unix())
+		if client.timeClient != nil {
+			timestamp = client.timeClient.getTime()
+		}
+		timestampData := []byte{
+			byte(timestamp >> 24),
+			byte(timestamp >> 16),
+			byte(timestamp >> 8),
+			byte(timestamp >> 0),
+		}
+		iv, err := generateIV()
+		if err != nil {
+			return fmt.Errorf("failed to generate iv: %v", err)
+		}
+		datagram, err := AssembleDatagram(&header, timestampData, data, receiverConfig.Key, iv, receiverConfig.Passphrase)
+		if err != nil {
+			return fmt.Errorf("failed to assemble datagram: %v", err)
+		}
+		client.ps.Publish(fmt.Sprintf("%s/inbox", receiver), datagram)
+		return nil
+
+	case DatagramTypeCommand:
+		panic("command not implemented yet")
+
+	default:
+		return fmt.Errorf("invalid datagram type: %d", datagramType)
+	}
+}
+
+func generateIV() ([]byte, error) {
+	iv := make([]byte, 16)
+	_, err := rand.Read(iv)
+	if err != nil {
+		return nil, err
+	}
+	return iv, nil
 }
 
 type timeServer struct {
@@ -133,4 +194,16 @@ func (client *timeClient) requestLoop() {
 		}
 		client.publishRequest()
 	}
+}
+
+func (client *timeClient) getTime() (timestamp int32) {
+	client.baseMutex.Lock()
+	if client.baseTime.IsZero() {
+		// Time not set. What should we do?
+	} else {
+		delta := time.Now().Sub(client.baseTime)
+		timestamp = client.baseTimestamp + int32(delta/time.Second)
+	}
+	client.baseMutex.Unlock()
+	return
 }

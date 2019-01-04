@@ -25,6 +25,7 @@ type PayloadEncoding int
 const (
 	PayloadEncodingBinary PayloadEncoding = 0
 	PayloadEncodingJSON   PayloadEncoding = 1
+	PayloadEncodingUTF8   PayloadEncoding = 2
 )
 
 type DatagramHeader struct {
@@ -70,6 +71,8 @@ func (d *DatagramHeader) Encode() []byte {
 		result.WriteByte('B')
 	case PayloadEncodingJSON:
 		result.WriteByte('J')
+	case PayloadEncodingUTF8:
+		result.WriteByte('U')
 	default:
 		panic(fmt.Sprintf("invalid payload encoding: %d", d.Encoding))
 	}
@@ -114,6 +117,8 @@ func ExtractPublicHeader(datagram []byte) (*DatagramHeader, error) {
 		header.Encoding = PayloadEncodingBinary
 	case 'J':
 		header.Encoding = PayloadEncodingJSON
+	case 'U':
+		header.Encoding = PayloadEncodingUTF8
 	default:
 		return nil, errors.New("unknown payload encoding")
 	}
