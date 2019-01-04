@@ -5,6 +5,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"os"
 
 	"github.com/iot-bp-project-2018/raspi-server/internal/commproto"
 	"github.com/iot-bp-project-2018/raspi-server/internal/mqttclient"
@@ -21,7 +22,7 @@ func main() {
 	flag.Parse()
 
 	if *configFlag == "" {
-		fmt.Println("please specify a configuration file using the -config flag")
+		fmt.Fprintln(os.Stderr, "please specify a configuration file using the -config flag")
 		return
 	}
 
@@ -31,7 +32,7 @@ func main() {
 
 	config, err := commproto.ParseConfiguration(*configFlag)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Fprintln(os.Stderr, err)
 		return
 	}
 

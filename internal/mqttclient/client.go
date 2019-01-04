@@ -14,7 +14,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-var log = logrus.New().WithFields(logrus.Fields{"package": "mqttclient"})
+var log = logrus.StandardLogger().WithFields(logrus.Fields{"package": "mqttclient"})
 
 type subscription struct {
 	channel  string
