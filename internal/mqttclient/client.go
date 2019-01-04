@@ -1,10 +1,9 @@
-// This package provides an MQTT-based implentation of a PubSubClient for the
-// commproto package.
+// Package mqttclient provides an MQTT-based implentation of a PubSubClient
+// for the commproto package.
 package mqttclient
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"strings"
 	"sync"
@@ -12,7 +11,10 @@ import (
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/iot-bp-project-2018/raspi-server/internal/commproto"
+	"github.com/sirupsen/logrus"
 )
+
+var log = logrus.New().WithFields(logrus.Fields{"package": "mqttclient"})
 
 type subscription struct {
 	channel  string
@@ -127,12 +129,12 @@ func (c *mqttClient) connect() {
 	for {
 		token := c.client.Connect()
 		if !token.Wait() || token.Error() == nil {
-			log.Println("[mqtt] connection acquired")
+			log.Println("Connection acquired")
 			return
 		}
 		message := token.Error().Error()
 		if !strings.HasSuffix(message, "connect: connection refused") {
-			log.Println("[mqtt] connect error:", message)
+			log.Println("Connect error:", message)
 		}
 		time.Sleep(10 * time.Second)
 	}
@@ -161,7 +163,7 @@ func (c *mqttClient) onConnectionLost(err error) {
 	c.connected = false
 	c.mutex.Unlock()
 
-	log.Println("[mqtt] connection lost:", err)
+	log.Println("Connection lost:", err)
 	time.Sleep(10 * time.Second)
 	c.connect()
 }
