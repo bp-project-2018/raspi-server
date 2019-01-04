@@ -3,9 +3,13 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
+	"strings"
+	"syscall"
 
 	"github.com/iot-bp-project-2018/raspi-server/internal/commproto"
 	"github.com/iot-bp-project-2018/raspi-server/internal/mqttclient"
@@ -36,11 +40,43 @@ func main() {
 		return
 	}
 
+	interceptSignals()
+
 	ps := mqttclient.NewMQTTClientWithServer(*mqttFlag)
 	client := commproto.NewClient(config, ps)
 
 	client.Start()
 
-	// Block indefinitely.
-	select {}
+	scanner := bufio.NewScanner(os.Stdin)
+	for scanner.Scan() {
+		input := scanner.Text()
+		if input == "exit" {
+			fmt.Println("bye")
+			os.Exit(0)
+		}
+
+		index := strings.Index(input, ":")
+		if index == -1 {
+			fmt.Println("to send messages use the format 'receiver: Text.'")
+			continue
+		}
+
+		receiver, body := strings.TrimSpace(input[:index]), strings.TrimSpace(input[index+1:])
+		err := client.SendString(receiver, commproto.DatagramTypeMessage, body)
+		if err != nil {
+			fmt.Println("error:", err)
+			continue
+		}
+
+		fmt.Println("ok")
+	}
+}
+
+func interceptSignals() {
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-signals
+		os.Exit(0)
+	}()
 }
