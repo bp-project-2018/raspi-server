@@ -5,10 +5,13 @@ env:
     global:
         - GOOS=linux
         - GOARCH=arm
-script:
-    - cd cmd/protoclient
-    - go test -v
-    - go build
+jobs:
+  include:
+    - stage: test
+      script: go test -v ./...
+    - stage: build
+      script: cd cmd/protoclient && go build
+    - script: cd cmd/server && go build
 notifications:
     on_success: never
     on_failure: never
