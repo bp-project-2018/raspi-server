@@ -36,11 +36,9 @@ func main() {
 	}
 
 	ps := mqttclient.NewMQTTClientWithServer(*mqttFlag)
+	client := commproto.NewClient(config, ps)
 
-	if config.TimeServer != nil {
-		server := commproto.NewTimeServer(*config.TimeServer, ps)
-		go server.Run()
-	}
+	client.Start()
 
 	// Block indefinitely.
 	select {}

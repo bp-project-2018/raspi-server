@@ -4,6 +4,7 @@ package commproto
 
 import (
 	"fmt"
+	"sync"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -30,28 +31,106 @@ type PubSubClient interface {
 // channel.
 type PubSubCallback func(channel string, data []byte)
 
-type TimeServer struct {
+type Client struct {
+	config     ClientConfiguration
+	ps         PubSubClient
+	timeServer *timeServer
+	timeClient *timeClient
+}
+
+func NewClient(config *ClientConfiguration, ps PubSubClient) *Client {
+	client := &Client{
+		config: *config,
+		ps:     ps,
+	}
+	if config.TimeServer != nil {
+		client.timeServer = &timeServer{
+			config: *config.TimeServer,
+			ps:     ps,
+		}
+	}
+	if config.TimeClient != nil {
+		client.timeClient = &timeClient{
+			config: *config.TimeClient,
+			ps:     ps,
+		}
+	}
+	return client
+}
+
+func (client *Client) Start() {
+	if client.timeServer != nil {
+		client.timeServer.Start()
+	}
+	if client.timeClient != nil {
+		client.timeClient.Start()
+	}
+}
+
+type timeServer struct {
 	config TimeConfiguration
 	ps     PubSubClient
 }
 
-func NewTimeServer(config TimeConfiguration, ps PubSubClient) *TimeServer {
-	return &TimeServer{
-		config: config,
-		ps:     ps,
-	}
-}
-
-func (server *TimeServer) Run() {
+func (server *timeServer) Start() {
 	log.WithFields(log.Fields{"addr": server.config.Address}).Debug("Starting time server")
 	server.ps.Subscribe(fmt.Sprintf("%s/time/request", server.config.Address), server.onRequest)
 }
 
-func (server *TimeServer) onRequest(channel string, _ []byte) {
+func (server *timeServer) onRequest(string, []byte) {
 	// @Todo: @Security: Maybe we should start dropping requests, if they come
 	// in too fast, to prevent a DOS attack.
 	timestamp := int32(time.Now().Unix())
 	data := AssembleTime(timestamp, server.config.Passphrase)
 	server.ps.Publish(fmt.Sprintf("%s/time", server.config.Address), data)
 	log.WithFields(log.Fields{"addr": server.config.Address, "timestamp": timestamp}).Debug("Time server sent time")
+}
+
+type timeClient struct {
+	config TimeConfiguration
+	ps     PubSubClient
+
+	// The time server reported baseTimestamp at local time baseTime.
+	baseMutex     sync.Mutex
+	baseTimestamp int32
+	baseTime      time.Time
+}
+
+func (client *timeClient) Start() {
+	log.WithFields(log.Fields{"addr": client.config.Address}).Debug("Starting time client")
+	client.ps.Subscribe(fmt.Sprintf("%s/time", client.config.Address), client.onTime)
+	client.publishRequest()
+	go client.requestLoop()
+}
+
+func (client *timeClient) onTime(_ string, data []byte) {
+	timestamp, err := DisassembleTime(data, client.config.Passphrase)
+	if err != nil {
+		log.Info("Time client received invalid time datagram")
+		return
+	}
+
+	client.baseMutex.Lock()
+	client.baseTimestamp = timestamp
+	client.baseTime = time.Now()
+	client.baseMutex.Unlock()
+	log.WithFields(log.Fields{"addr": client.config.Address, "timestamp": timestamp}).Debug("Time client received time")
+}
+
+func (client *timeClient) publishRequest() {
+	log.WithFields(log.Fields{"addr": client.config.Address}).Debug("Time client will send request")
+	client.ps.Publish(fmt.Sprintf("%s/time/request", client.config.Address), []byte{}) // empty request
+}
+
+func (client *timeClient) requestLoop() {
+	for {
+		time.Sleep(time.Second)
+		client.baseMutex.Lock()
+		baseTime := client.baseTime
+		client.baseMutex.Unlock()
+		if !baseTime.IsZero() {
+			return // time received, all is well :)
+		}
+		client.publishRequest()
+	}
 }
