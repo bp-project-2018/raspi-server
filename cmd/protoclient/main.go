@@ -45,6 +45,14 @@ func main() {
 	ps := mqttclient.NewMQTTClientWithServer(*mqttFlag)
 	client := commproto.NewClient(config, ps)
 
+	client.RegisterCallback(func(sender string, datagramType commproto.DatagramType, encoding commproto.PayloadEncoding, data []byte) {
+		if encoding == commproto.PayloadEncodingUTF8 {
+			fmt.Printf("%s: %s\n", sender, string(data))
+			return
+		}
+		fmt.Printf("%s: <encoded message> (encoding = %d)\n", sender, encoding)
+	})
+
 	client.Start()
 
 	scanner := bufio.NewScanner(os.Stdin)

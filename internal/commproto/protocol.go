@@ -37,7 +37,10 @@ type Client struct {
 	ps         PubSubClient
 	timeServer *timeServer
 	timeClient *timeClient
+	callbacks  []DatagramCallback
 }
+
+type DatagramCallback func(sender string, datagramType DatagramType, encoding PayloadEncoding, data []byte)
 
 func NewClient(config *ClientConfiguration, ps PubSubClient) *Client {
 	client := &Client{
@@ -59,12 +62,60 @@ func NewClient(config *ClientConfiguration, ps PubSubClient) *Client {
 	return client
 }
 
+func (client *Client) RegisterCallback(callback DatagramCallback) {
+	if callback == nil {
+		panic("nil callback")
+	}
+	client.callbacks = append(client.callbacks, callback)
+}
+
 func (client *Client) Start() {
 	if client.timeServer != nil {
 		client.timeServer.Start()
 	}
 	if client.timeClient != nil {
 		client.timeClient.Start()
+	}
+	client.ps.Subscribe(fmt.Sprintf("%s/inbox", client.config.HostAddress), client.onDatagram)
+}
+
+func (client *Client) onDatagram(_ string, datagram []byte) {
+	header, err := ExtractPublicHeader(datagram)
+	if err != nil {
+		log.WithFields(log.Fields{"err": err}).Warn("Received invalid datagram")
+		return
+	}
+
+	sender := header.SourceAddress
+	senderConfig, ok := client.config.Partners[sender]
+	if !ok {
+		log.WithFields(log.Fields{"sender": sender}).Info("Ignoring datagram from unknown sender")
+		return
+	}
+
+	switch header.Type {
+	case DatagramTypeMessage:
+		timestampData, data, err := DisassembleDatagram(datagram, header, 4, senderConfig.Key, senderConfig.Passphrase)
+		if err != nil {
+			log.WithFields(log.Fields{"err": err}).Warn("Received invalid datagram")
+			return
+		}
+
+		timestamp := int32(0)
+		timestamp += int32(timestampData[0]) << 24
+		timestamp += int32(timestampData[1]) << 16
+		timestamp += int32(timestampData[2]) << 8
+		timestamp += int32(timestampData[3]) << 0
+
+		// @Todo: Validate timestamp.
+
+		// @Todo: @Sync: Protect client.callbacks??
+		for _, callback := range client.callbacks {
+			callback(sender, header.Type, header.Encoding, data)
+		}
+
+	case DatagramTypeCommand:
+		panic("command not implemented yet")
 	}
 }
 
