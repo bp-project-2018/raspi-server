@@ -18,7 +18,7 @@ import (
 
 var (
 	configFlag  = flag.String("config", "", "load configuration from `file`")
-	mqttFlag    = flag.String("mqtt", ":1883", "MQTT broker URI (format is scheme://host:port)")
+	mqttFlag    = flag.String("mqtt", "tcp://192.168.10.1:1883", "MQTT broker URI (format is scheme://host:port)")
 	verboseFlag = flag.Bool("verbose", false, "enable detailed logging")
 )
 
