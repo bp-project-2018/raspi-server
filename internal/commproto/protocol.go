@@ -4,6 +4,7 @@ package commproto
 
 import (
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -107,7 +108,16 @@ func (client *Client) onDatagram(_ string, datagram []byte) {
 		timestamp += int32(timestampData[2]) << 8
 		timestamp += int32(timestampData[3]) << 0
 
-		// @Todo: Validate timestamp.
+		current, err := client.getTime()
+		if err != nil {
+			log.WithFields(log.Fields{"err": err}).Warn("Failed to ge time while receiving datagram")
+			return
+		}
+
+		if delta := timestamp - current; delta < -1 || delta > 1 { // @Hardcoded
+			log.WithFields(log.Fields{"delta": delta}).Warn("Received datagram with invalid timestamp")
+			return
+		}
 
 		// @Todo: @Sync: Protect client.callbacks??
 		for _, callback := range client.callbacks {
@@ -141,9 +151,9 @@ func (client *Client) Send(receiver string, datagramType DatagramType, encoding 
 			Encoding:      encoding,
 			SourceAddress: client.config.HostAddress,
 		}
-		timestamp := int32(time.Now().Unix())
-		if client.timeClient != nil {
-			timestamp = client.timeClient.getTime()
+		timestamp, err := client.getTime()
+		if err != nil {
+			return fmt.Errorf("failed to get time: %v", err)
 		}
 		timestampData := []byte{
 			byte(timestamp >> 24),
@@ -168,6 +178,13 @@ func (client *Client) Send(receiver string, datagramType DatagramType, encoding 
 	default:
 		return fmt.Errorf("invalid datagram type: %d", datagramType)
 	}
+}
+
+func (client *Client) getTime() (timestamp int32, err error) {
+	if client.timeClient != nil {
+		return client.timeClient.getTime()
+	}
+	return int32(time.Now().Unix()), nil
 }
 
 func generateIV() ([]byte, error) {
@@ -247,10 +264,10 @@ func (client *timeClient) requestLoop() {
 	}
 }
 
-func (client *timeClient) getTime() (timestamp int32) {
+func (client *timeClient) getTime() (timestamp int32, err error) {
 	client.baseMutex.Lock()
 	if client.baseTime.IsZero() {
-		// Time not set. What should we do?
+		err = errors.New("no time server connection")
 	} else {
 		delta := time.Now().Sub(client.baseTime)
 		timestamp = client.baseTimestamp + int32(delta/time.Second)
