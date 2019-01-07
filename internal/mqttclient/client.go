@@ -41,15 +41,7 @@ func NewMQTTClientWithServer(server string) commproto.PubSubClient {
 
 func getClientID() string {
 	hostname, _ := os.Hostname()
-	clientID := fmt.Sprintf("%s%d", hostname, time.Now().Unix())
-
-	// According to the MQTT v3.1 specification, a client id mus be no longer
-	// than 23 characters.
-	if len(clientID) > 23 {
-		return clientID[:23]
-	}
-
-	return clientID
+	return fmt.Sprintf("%s%d", hostname, time.Now().Unix())
 }
 
 // NewMQTTClientWithOptions configures a new MQTT client using the provided
@@ -127,6 +119,8 @@ func (c *mqttClient) Publish(channel string, data []byte) {
 
 func (c *mqttClient) connect() {
 	for {
+		reader := c.client.OptionsReader()
+		log.WithFields(logrus.Fields{"clientID": reader.ClientID()}).Debug("Trying to connect")
 		token := c.client.Connect()
 		if !token.Wait() || token.Error() == nil {
 			log.Println("Connection acquired")
