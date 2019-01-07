@@ -10,7 +10,7 @@ import (
 var influxClient client.Client
 
 func initMetrics() {
-	influxClient, err := client.NewHTTPClient(client.HTTPConfig{
+	client, err := client.NewHTTPClient(client.HTTPConfig{
 		Addr:     influxDBHost,
 		Username: username,
 		Password: password,
@@ -18,6 +18,7 @@ func initMetrics() {
 	if err != nil {
 		panic(err)
 	}
+	influxClient = client
 }
 
 // Fields ...
