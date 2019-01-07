@@ -9,7 +9,7 @@ import (
 )
 
 var tokenStorage struct {
-	Tokens []string
+	Tokens []string `json:"tokens"`
 }
 
 func verifyToken(token string) (valid bool) {
@@ -47,7 +47,7 @@ func loadTokens() {
 }
 
 func saveTokens() {
-	data, err := json.Marshal(tokenStorage)
+	data, err := json.MarshalIndent(tokenStorage, "", "\t")
 	if err != nil {
 		log.Println("[tokens] could not encode token storage")
 		log.Panicln(err)
