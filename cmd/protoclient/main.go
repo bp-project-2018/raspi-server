@@ -93,7 +93,7 @@ func main() {
 				if isTerminal && len(data) == 1 && data[0] == '\r' {
 					data[0] = '\n'
 				}
-			} else if runtime.GOOS == "linux" {
+			} else if runtime.GOOS == "darwin" || runtime.GOOS == "linux" {
 				if isTerminal && len(data) == 1 && data[0] == '\x7f' {
 					data[0] = '\b'
 				}
