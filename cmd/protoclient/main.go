@@ -109,7 +109,9 @@ func main() {
 				input <- terminalBuffer.String()
 				terminalBuffer = bytes.Buffer{}
 			} else if len(data) == 1 && data[0] == '\b' {
-				terminalBuffer.Truncate(terminalBuffer.Len() - 1)
+				if terminalBuffer.Len() > 0 {
+					terminalBuffer.Truncate(terminalBuffer.Len() - 1)
+				}
 			} else {
 				terminalBuffer.Write(data)
 			}
