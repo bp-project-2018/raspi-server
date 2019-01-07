@@ -5,6 +5,7 @@ env:
     global:
         - GOOS=linux
         - GOARCH=arm
+install: go get -t -v ./...
 jobs:
   include:
     - stage: test
