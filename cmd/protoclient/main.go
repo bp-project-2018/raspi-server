@@ -48,17 +48,6 @@ func main() {
 		return
 	}
 
-	ps := mqttclient.NewMQTTClientWithServer(*mqttFlag)
-	client := commproto.NewClient(config, ps)
-
-	client.RegisterCallback(func(sender string, datagramType commproto.DatagramType, encoding commproto.PayloadEncoding, data []byte) {
-		if encoding == commproto.PayloadEncodingUTF8 {
-			fmt.Printf("%s: %s\n", sender, string(data))
-			return
-		}
-		fmt.Printf("%s: <encoded message> (encoding = %d)\n", sender, encoding)
-	})
-
 	input := make(chan string, 1)
 
 	{
@@ -145,6 +134,22 @@ func main() {
 			ForceColors: true,
 		})
 	}
+
+	ps := mqttclient.NewMQTTClientWithServer(*mqttFlag)
+	client := commproto.NewClient(config, ps)
+
+	client.RegisterCallback(func(sender string, datagramType commproto.DatagramType, encoding commproto.PayloadEncoding, data []byte) {
+		switch encoding {
+		case commproto.PayloadEncodingBinary:
+			fmt.Fprintf(out, "%s: <binary message>\n%x\n", sender, data)
+		case commproto.PayloadEncodingUTF8:
+			fmt.Fprintf(out, "%s: %s\n", sender, string(data))
+		case commproto.PayloadEncodingJSON:
+			fmt.Fprintf(out, "%s: <json message>\n%s\n", sender, string(data))
+		default:
+			fmt.Fprintf(out, "%s: <unknown encoding %d>\n", sender, encoding)
+		}
+	})
 
 	client.Start()
 
