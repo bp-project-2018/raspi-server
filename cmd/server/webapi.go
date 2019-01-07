@@ -3,12 +3,15 @@ package main
 import (
 	"context"
 	"net/http"
+	"sync/atomic"
 
 	"github.com/labstack/echo"
 	"github.com/labstack/echo/middleware"
 )
 
 type generic map[string]interface{}
+
+var authorizationLock int32
 
 func startWebserver() {
 	e := echo.New()
@@ -38,6 +41,13 @@ func getStatus(c echo.Context) error {
 }
 
 func getDeviceToken(c echo.Context) error {
+
+	if !atomic.CompareAndSwapInt32(&authorizationLock, 0, 1) {
+		// another authorization process is currently running
+		return c.JSON(http.StatusOK, generic{"err": "Another authorization process is already running"})
+	}
+	defer atomic.StoreInt32(&authorizationLock, 0)
+
 	timeout, cancel := context.WithTimeout(context.Background(), buttonTimeout)
 	defer cancel()
 	authorized := HardwareWaitForPairingButton(timeout)

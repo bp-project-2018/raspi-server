@@ -18,8 +18,11 @@ const (
 	pinButtonPair = rpio.Pin(21) // physical pin 40
 )
 
+var hardwareOpened = false
+
 // OpenHardware initializes the hardware
 func openHardware() {
+	hardwareOpened = true
 	err := rpio.Open()
 	if err != nil {
 		panic(err)
@@ -32,12 +35,17 @@ func openHardware() {
 func closeHardware() {
 	err := rpio.Close()
 	if err != nil {
-		log.Println("[hardware] Failed to close rpio:", err)
+		log.Fatalln("[hardware] Failed to close rpio:", err)
 	}
+	hardwareOpened = false
 }
 
 // HardwareWaitForPairingButton waits until the pairing button is pressed or until the context expired
 func HardwareWaitForPairingButton(c context.Context) bool {
+	if hardwareOpened {
+		log.Println("[hardware] Blocked double pairing button wait call")
+		return false
+	}
 	openHardware()
 	defer closeHardware()
 	for {
