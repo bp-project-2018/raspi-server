@@ -1,11 +1,11 @@
 build:
-	cd cmd/protoclient && go build
+	cd cmd/server && go build
 
 run: build
-	./cmd/protoclient/protoclient
+	cd cmd/server && ./server
 	
 test:
-	cd internal/commproto && go test
+	cd internal/server && go test
 
 upload:
-	cd cmd/protoclient && env GOOS=linux GOARCH=arm go build && rsync -rtv protoclient pi@kronos.local:
+	cd cmd/server && env GOOS=linux GOARCH=arm go build && rsync -rt server pi@kronos.local: && rsync --exclude='.git' -rt static pi@kronos.local:
