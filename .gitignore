@@ -1,5 +1,6 @@
 /cmd/server/server
 /cmd/server/server.exe
+/cmd/server/config
 /cmd/protoclient/protoclient
 /cmd/protoclient/protoclient.exe
 
