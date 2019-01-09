@@ -139,16 +139,23 @@ func main() {
 	client := commproto.NewClient(config, ps)
 
 	client.RegisterCallback(func(sender string, datagramType commproto.DatagramType, encoding commproto.PayloadEncoding, data []byte) {
+		var message strings.Builder
+		message.WriteString(sender)
+		if datagramType == commproto.DatagramTypeCommand {
+			message.WriteRune('!')
+		}
+		message.WriteString(": ")
 		switch encoding {
 		case commproto.PayloadEncodingBinary:
-			fmt.Fprintf(out, "%s: <binary message>\n%x\n", sender, data)
+			fmt.Fprintf(&message, "<binary message>\n%x\n", data)
 		case commproto.PayloadEncodingUTF8:
-			fmt.Fprintf(out, "%s: %s\n", sender, string(data))
+			fmt.Fprintf(&message, "%s\n", string(data))
 		case commproto.PayloadEncodingJSON:
-			fmt.Fprintf(out, "%s: <json message>\n%s\n", sender, string(data))
+			fmt.Fprintf(&message, "<json message>\n%s\n", string(data))
 		default:
-			fmt.Fprintf(out, "%s: <unknown encoding %d>\n", sender, encoding)
+			fmt.Fprintf(&message, "<unknown encoding %d>\n", encoding)
 		}
+		fmt.Fprint(out, message.String())
 	})
 
 	client.Start()
@@ -166,7 +173,12 @@ func main() {
 		}
 
 		receiver, body := strings.TrimSpace(line[:index]), strings.TrimSpace(line[index+1:])
-		err := client.SendString(receiver, commproto.DatagramTypeMessage, body)
+		datagramType := commproto.DatagramTypeMessage
+		if strings.HasSuffix(receiver, "!") {
+			receiver = strings.TrimSpace(receiver[:len(receiver)-1])
+			datagramType = commproto.DatagramTypeCommand
+		}
+		err := client.SendString(receiver, datagramType, body)
 		if err != nil {
 			fmt.Fprintln(out, "error:", err)
 			continue

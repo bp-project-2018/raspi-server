@@ -28,6 +28,11 @@ const (
 	PayloadEncodingUTF8   PayloadEncoding = 2
 )
 
+type Payload struct {
+	Encoding PayloadEncoding
+	Data     []byte
+}
+
 type DatagramHeader struct {
 	Type          DatagramType
 	Version       int
@@ -415,4 +420,39 @@ func DisassembleTime(data []byte, passphrase string) (int32, error) {
 	time += int32(data[5]) << 0
 
 	return time, nil
+}
+
+func AssembleSession(address string, id []byte) []byte {
+	var buffer bytes.Buffer
+
+	length := len(address)
+	if length > math.MaxUint8 {
+		panic("address too long")
+	}
+	buffer.WriteByte(byte(length))
+	buffer.WriteString(address)
+
+	if len(id) != 16 {
+		panic("id has wrong length")
+	}
+	buffer.Write(id)
+
+	return buffer.Bytes()
+}
+
+func DisassembleSession(data []byte) (address string, id []byte, err error) {
+	if len(data) == 0 {
+		err = errors.New("invalid datagram")
+		return
+	}
+
+	addressLength := int(data[0])
+	if len(data) != 1+addressLength+16 {
+		err = errors.New("invalid datagram")
+		return
+	}
+
+	address = string(data[1 : 1+addressLength])
+	id = data[1+addressLength:]
+	return
 }
