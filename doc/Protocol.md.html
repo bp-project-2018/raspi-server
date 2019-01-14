@@ -8,9 +8,9 @@ Provides encrypted and authenticated point-to-point communication over a publish
 Prerequisites
 =============
 
-- Shared AES key with each communication partner
-- Shared HMAC passphrase with each communication partner
-- Access to a publish-subscribe service (e.g. MQTT)
+- A shared AES key with each communication partner.
+- A shared HMAC passphrase with each communication partner.
+- Access to a publish-subscribe service (e.g. MQTT).
 
 Concepts
 ========
@@ -79,20 +79,144 @@ The `master` on the other hand is subscribed to this channel and is thus able to
 The datagram is constructed as follows.
 The top row lists the length in bytes of each part, while the bottom row provides a short description.
 
-************************************************************************************
-*                                    |<--------- AES Encrypted  --------->|        *
-* ┌───────────────────┬─────────┬────┬───────────┬───────┬──────┬─────────┬──────┐ *
-* │ 1                 │ 1-255   │ 16 │ 8         │ 8     │ ?    │ 1-16    │ 32   │ *
-* ├───────────────────┼─────────┼────┼───────────┼───────┼──────┼─────────┼──────┤ *
-* │ Length of address │ Address │ IV │ Timestamp │ Nonce │ Data │ Padding │ HMAC │ *
-* └───────────────────┴─────────┴────┴───────────┴───────┴──────┴─────────┴──────┘ *
-* |<--------------------------- HMAC Message  --------------------------->|        *
-************************************************************************************
+****************************************************************************
+* Datagram                           |<----- AES Encrypted  ----->|        *
+* ┌───────────────────┬─────────┬────┬───────────┬──────┬─────────┬──────┐ *
+* │ 1                 │ 1-255   │ 16 │ 8         │ ?    │ 1-16    │ 32   │ *
+* ├───────────────────┼─────────┼────┼───────────┼──────┼─────────┼──────┤ *
+* │ Length of address │ Address │ IV │ Timestamp │ Data │ Padding │ HMAC │ *
+* └───────────────────┴─────────┴────┴───────────┴──────┴─────────┴──────┘ *
+* |<----------------------- HMAC Message  ----------------------->|        *
+****************************************************************************
 
+- The address contains the address of the sender (`client` in this case).
+- The receiver is identified by sending the message to the correct channel (`master/inbox`).
 - The initialization vector (IV) is an array of 16 bytes that is randomly generated for each datagram.
+- The receiver has to check that the timestamp is valid.
+- The receiver also has to check that the datagram is newer than the previous datagram from that address.
+  This ensures that duplicate messages are ignored.
 - For padding the PKCS#7 padding standard is used.
 - The payload of the datagram is encrypted using AES-128-CBC.
 - The whole datagram is authenticated using HMAC-SHA256.
+
+Time Synchronization
+--------------------
+
+Some hosts, especially sensors, do not have a built-in real-time clock, which is able to track time while the device is powered off.
+Therefore they need to synchronize their internal timers with a time source in the network at startup and at regular intervals.
+For this purpose the other hosts can run a time server to advertise their current time to the network.
+
+Time synchronization uses the same addresses and shared keys as regular data transfer.
+The configuration is flexible: A host with an external time source (e.g. a real-time clock),
+can choose between relying on the external source or querying a time server.
+A host can also choose whether to run a time server itself, depending on whether
+it has an external time source or if it would just relay the time from another
+time server and the processing power of the host itself.
+A host without an external time source can query one or multiple time servers.
+
+Time synchronization works in the following way. Again, the host `client` wants
+to request the current time from the host `master` which runs a time server.
+
+****************************************************************
+*        .---------.                .---------.                *
+*        | client  |                | master  |                *
+*        '----+----'                '----+----'                *
+*             |                          |                     *
+*             |       TimeRequest        |                     *
+*             +------------------------->| master/time/request *
+*             |                          |                     *
+*             |                          |                     *
+*             |                          |                     *
+*             |       TimeResponse       |                     *
+* client/time |<-------------------------+                     *
+*             |                          |                     *
+*             |                          |                     *
+****************************************************************
+
+The messages are constructed as follows.
+
+**************************************************************
+* TimeRequest                                                *
+* ┌───────────────────┬─────────┬───────┬──────┐             *
+* │ 1                 │ 1-255   │ 8     │ 32   │             *
+* ├───────────────────┼─────────┼───────┼──────┤             *
+* │ Length of address │ Address │ Nonce │ HMAC │             *
+* └───────────────────┴─────────┴───────┴──────┘             *
+* |<---------- HMAC Message  ---------->|                    *
+*                                                            *
+*                                                            *
+* TimeResponse                                               *
+* ┌───────────────────┬─────────┬───────────┬───────┬──────┐ *
+* │ 1                 │ 1-255   │ 8         │ 8     │ 32   │ *
+* ├───────────────────┼─────────┼───────────┼───────┼──────┤ *
+* │ Length of address │ Address │ Timestamp │ Nonce │ HMAC │ *
+* └───────────────────┴─────────┴───────────┴───────┴──────┘ *
+* |<---------------- HMAC Message  ---------------->|        *
+**************************************************************
+
+- The address contains the address of the sender (`client` for the request and `master` for the response in this case).
+- The receiver is identified by sending the message to the correct channel.
+- The time server has to reproduce the nonce from the request.
+- The client has to check the nonce and make sure the response is not delayed by too much.
+- The messages are not encrypted as they do not contain secret data.
+- The messages are authenticated using HMAC-SHA256.
+
+Security
+========
+
+The basic security properties of the protocol are derived from the used cryptographic primitives:
+
+- All payload data is encrypted using AES therefore ensuring the *confidentiality* of said data.
+- Every message has a Message Authentication Code (MAC), thus ensuring the *integrity* and *authenticity* of the message.
+
+This means that in general an adversary will not be able to read payload data,
+change message content or create fake messages without breaking AES or HMAC or
+gaining access to the shared secret keys.
+
+Man-in-the-middle attacks are also impossible as both parties mutually authenticate each other via the MACs of the messages using pre-shared keys.
+
+In the following sections we describe how the protocol is immune to certain kinds of attacks.
+
+Replay Attacks
+--------------
+
+1. Datagram
+
+   A replayed datagram has the same or an older timestamp as the last datagram
+   received and is thus discarded by the receiver.
+
+2. TimeRequest
+
+   A replayed time request will result in the generation of a new time response.
+   This has no influence the behavior of the time server. If the client has
+   received the original time response, the client will discard the redundant
+   response. Otherwise, the new response will be accepted by the client, but it
+   contains the correct time, because it was regenerated by the time server and
+   thus the client will be in a correct configuration.
+
+3. TimeResponse
+
+   A replayed time response is discarded by the receiver because the nonce does
+   not match or because any previous request timed out.
+
+Delayed Message Attacks
+-----------------------
+
+1. Datagram
+
+   A delayed datagram is discarded by the receiver because of the timestamp check.
+
+2. TimeRequest
+
+   A delayed time request will delay the generation of the time response. See
+   point 3 on this list.
+
+3. TimeResponse
+
+   A delayed time response is discarded by the client, because the corresponding
+   request has timed out. The client checks that only a limited amount of time
+   has passed between sending the time request and receiving the corresponding
+   response to make sure that the clocks are synchronized properly.
 
 Open Questions
 ==============
