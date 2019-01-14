@@ -9,11 +9,10 @@ import (
 )
 
 type ClientConfiguration struct {
-	HostAddress     string                          `json:"host-addr"`
-	AcceptsCommands bool                            `json:"accepts-commands"`
-	TimeServer      *TimeConfiguration              `json:"time-server"`
-	TimeClient      *TimeConfiguration              `json:"time-client"`
-	Partners        map[string]PartnerConfiguration `json:"partners"`
+	HostAddress string                          `json:"host-addr"`
+	TimeServer  *TimeConfiguration              `json:"time-server"`
+	TimeClient  *TimeConfiguration              `json:"time-client"`
+	Partners    map[string]PartnerConfiguration `json:"partners"`
 }
 
 type TimeConfiguration struct {

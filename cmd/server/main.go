@@ -12,11 +12,7 @@ import (
 	"github.com/iot-bp-project-2018/raspi-server/internal/mqttclient"
 )
 
-func mqttHandler(sender string, datagramType commproto.DatagramType, encoding commproto.PayloadEncoding, data []byte) {
-	if encoding != commproto.PayloadEncodingJSON {
-		log.Printf("unknown payload encoding %d in message from %s\n", datagramType, sender)
-		return
-	}
+func sensorDataHandler(sender string, data []byte) {
 	payload := SensorPayloadFromJSONBuffer(data)
 	// Collect data
 	fmt.Println(sender, payload)
@@ -34,7 +30,7 @@ func main() {
 
 	ps := mqttclient.NewMQTTClientWithServer(mqttEndpoint)
 	client := commproto.NewClient(config, ps)
-	client.RegisterCallback(mqttHandler)
+	client.RegisterCallback(sensorDataHandler)
 	client.Start()
 
 	loadTokens()

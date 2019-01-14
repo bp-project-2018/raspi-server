@@ -1,6 +1,5 @@
 {
 	"host-addr": "shredder",
-	"accepts-commands": true,
 	"time-server": {
 		"addr": "public",
 		"passphrase": "Ein Idiot in Uniform ist immer noch ein Idiot."

@@ -1,6 +1,5 @@
 {
 	"host-addr": "kalliope",
-	"accepts-commands": true,
 	"time-client": {
 		"addr": "public",
 		"passphrase": "Ein Idiot in Uniform ist immer noch ein Idiot."

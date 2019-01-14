@@ -138,23 +138,12 @@ func main() {
 	ps := mqttclient.NewMQTTClientWithServer(*mqttFlag)
 	client := commproto.NewClient(config, ps)
 
-	client.RegisterCallback(func(sender string, datagramType commproto.DatagramType, encoding commproto.PayloadEncoding, data []byte) {
+	client.RegisterCallback(func(sender string, data []byte) {
 		var message strings.Builder
 		message.WriteString(sender)
-		if datagramType == commproto.DatagramTypeCommand {
-			message.WriteRune('!')
-		}
 		message.WriteString(": ")
-		switch encoding {
-		case commproto.PayloadEncodingBinary:
-			fmt.Fprintf(&message, "<binary message>\n%x\n", data)
-		case commproto.PayloadEncodingUTF8:
-			fmt.Fprintf(&message, "%s\n", string(data))
-		case commproto.PayloadEncodingJSON:
-			fmt.Fprintf(&message, "<json message>\n%s\n", string(data))
-		default:
-			fmt.Fprintf(&message, "<unknown encoding %d>\n", encoding)
-		}
+		message.WriteString(string(data))
+		message.WriteString("\n")
 		fmt.Fprint(out, message.String())
 	})
 
@@ -173,12 +162,7 @@ func main() {
 		}
 
 		receiver, body := strings.TrimSpace(line[:index]), strings.TrimSpace(line[index+1:])
-		datagramType := commproto.DatagramTypeMessage
-		if strings.HasSuffix(receiver, "!") {
-			receiver = strings.TrimSpace(receiver[:len(receiver)-1])
-			datagramType = commproto.DatagramTypeCommand
-		}
-		err := client.SendString(receiver, datagramType, body)
+		err := client.SendString(receiver, body)
 		if err != nil {
 			fmt.Fprintln(out, "error:", err)
 			continue
