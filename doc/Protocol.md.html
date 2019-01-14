@@ -1,0 +1,108 @@
+<meta charset="utf-8">
+
+Introduction
+============
+
+Provides encrypted and authenticated point-to-point communication over a publish-subscribe service using pre-shared keys.
+
+Prerequisites
+=============
+
+- Shared AES key with each communication partner
+- Shared HMAC passphrase with each communication partner
+- Access to a publish-subscribe service (e.g. MQTT)
+
+Concepts
+========
+
+Host
+: A device/system in the network, includes both Raspberry Pis and sensors.
+
+Address
+: Each host must have a unique address in the network. Addresses are strings with a maximum length of 255 bytes.
+
+Datagram
+: Protocol data packet that is sent over the network.
+
+Timestmap
+: A timestamp is a signed 64-bit integer Unix timestamp with nanosecond precision, i.e. it contains the number of nanoseconds elapsed since January 1, 1970 UTC.
+
+Channel
+: A logical channel or topic of the underlying publish-subscribe service.
+
+Message
+: A message posted to a channel on the underlying publish-subscribe service.
+
+Basic API
+=========
+
+In C:
+
+~~~~~~~~~~~~~~~~~~~~ C
+typedef void (Callback*)(const char* address, const byte* data, int data_len);
+
+void send(const char* address, const byte* data, int data_len);
+void set_receive_callback(Callback callback);
+~~~~~~~~~~~~~~~~~~~~
+
+In Go:
+
+~~~~~~~~~~~~~~~~~~~~ Go
+type Callback func(address string, data []byte)
+
+func Send(address string, data []byte) { /* ... */ }
+func SetReceiveCallback(callback Callback) { /* ... */ }
+~~~~~~~~~~~~~~~~~~~~
+
+Implementation
+==============
+
+Data Transfer
+-------------
+
+To send the actual data, only a single message needs to be exchanged.
+In this example, a host with the address `client` sends data to another host with the address `master`.
+To do this the `client` publishes a message which contains the datagram to the channel `master/inbox`.
+The `master` on the other hand is subscribed to this channel and is thus able to receive the message.
+
+**************************************************
+* .---------.                .---------.         *
+* | client  |                | master  |         *
+* '----+----'                '----+----'         *
+*      |                          |              *
+*      |         Datagram         |              *
+*      +------------------------->| master/inbox *
+*      |                          |              *
+*      |                          |              *
+**************************************************
+
+The datagram is constructed as follows.
+The top row lists the length in bytes of each part, while the bottom row provides a short description.
+
+************************************************************************************
+*                                    |<--------- AES Encrypted  --------->|        *
+* ┌───────────────────┬─────────┬────┬───────────┬───────┬──────┬─────────┬──────┐ *
+* │ 1                 │ 1-255   │ 16 │ 8         │ 8     │ ?    │ 1-16    │ 32   │ *
+* ├───────────────────┼─────────┼────┼───────────┼───────┼──────┼─────────┼──────┤ *
+* │ Length of address │ Address │ IV │ Timestamp │ Nonce │ Data │ Padding │ HMAC │ *
+* └───────────────────┴─────────┴────┴───────────┴───────┴──────┴─────────┴──────┘ *
+* |<--------------------------- HMAC Message  --------------------------->|        *
+************************************************************************************
+
+- The initialization vector (IV) is an array of 16 bytes that is randomly generated for each datagram.
+- For padding the PKCS#7 padding standard is used.
+- The payload of the datagram is encrypted using AES-128-CBC.
+- The whole datagram is authenticated using HMAC-SHA256.
+
+Open Questions
+==============
+
+- Valid time frame from which to accept timestamps?
+
+References
+==========
+
+- https://hackaday.com/2017/06/20/practical-iot-cryptography-on-the-espressif-esp8266/
+- https://crypto.stackexchange.com/a/205
+
+<!-- Markdeep: --><style class="fallback">body{visibility:hidden;white-space:pre;font-family:monospace}</style><script src="markdeep.min.js" charset="utf-8"></script><script src="https://casual-effects.com/markdeep/latest/markdeep.min.js" charset="utf-8"></script><script>window.alreadyProcessedMarkdeep||(document.body.style.visibility="visible")</script>
