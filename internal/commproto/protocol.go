@@ -3,6 +3,7 @@ package commproto
 // This file manages the flow of datagrams.
 
 import (
+	"bytes"
 	"crypto/rand"
 	"errors"
 	"fmt"
@@ -37,7 +38,6 @@ type Client struct {
 	config ClientConfiguration
 	ps     PubSubClient
 
-	timeServer *timeServer
 	timeClient *timeClient
 
 	callbacks []DatagramCallback
@@ -50,16 +50,16 @@ func NewClient(config *ClientConfiguration, ps PubSubClient) *Client {
 		config: *config,
 		ps:     ps,
 	}
-	if config.TimeServer != nil {
-		client.timeServer = &timeServer{
-			config: *config.TimeServer,
-			ps:     ps,
+	if serverAddress := config.UseTimeServer; serverAddress != "" {
+		serverConfig, ok := config.Partners[serverAddress]
+		if !ok {
+			panic("time server address not in 'partners'")
 		}
-	}
-	if config.TimeClient != nil {
 		client.timeClient = &timeClient{
-			config: *config.TimeClient,
-			ps:     ps,
+			clientAddress:    config.HostAddress,
+			serverAddress:    serverAddress,
+			serverPassphrase: serverConfig.Passphrase,
+			ps:               ps,
 		}
 	}
 	return client
@@ -73,13 +73,41 @@ func (client *Client) RegisterCallback(callback DatagramCallback) {
 }
 
 func (client *Client) Start() {
-	if client.timeServer != nil {
-		client.timeServer.Start()
+	if client.config.HostTimeServer {
+		log.Debug("Starting time server")
+		client.ps.Subscribe(fmt.Sprintf("%s/time/request", client.config.HostAddress), client.onTimeRequest)
 	}
 	if client.timeClient != nil {
 		client.timeClient.Start()
 	}
 	client.ps.Subscribe(fmt.Sprintf("%s/inbox", client.config.HostAddress), client.onDatagram)
+}
+
+func (client *Client) onTimeRequest(channel string, request []byte) {
+	// @Todo: @Security: Maybe we should start dropping requests, if they come in too fast, to prevent a DOS attack.
+
+	partner, ok := ExtractAddress(request)
+	if !ok {
+		log.Warn("Time server received invalid message")
+		return
+	}
+
+	partnerConfig, ok := client.config.Partners[partner]
+	if !ok {
+		log.WithFields(log.Fields{"sender": partner}).Info("Ignoring time request from unknown sender")
+		return
+	}
+
+	nonce, err := DisassembleTimeRequest(request, partner, partnerConfig.Passphrase)
+	if err != nil {
+		log.WithFields(log.Fields{"err": err}).Warn("Received invalid time request")
+		return
+	}
+
+	timestamp := time.Now().UnixNano()
+	response := AssembleTimeResponse(client.config.HostAddress, timestamp, nonce, partnerConfig.Passphrase)
+	client.ps.Publish(fmt.Sprintf("%s/time", partner), response)
+	log.WithFields(log.Fields{"receiver": partner, "timestamp": timestamp}).Debug("Time server sent time")
 }
 
 func (client *Client) onDatagram(_ string, datagram []byte) {
@@ -95,13 +123,11 @@ func (client *Client) onDatagram(_ string, datagram []byte) {
 		return
 	}
 
-	timestamp64, data, err := DisassembleDatagram(datagram, sender, senderConfig.Key, senderConfig.Passphrase)
+	timestamp, data, err := DisassembleDatagram(datagram, sender, senderConfig.Key, senderConfig.Passphrase)
 	if err != nil {
 		log.WithFields(log.Fields{"err": err}).Warn("Received invalid datagram")
 		return
 	}
-
-	timestamp := int32(timestamp64 / 1e6) // @Temporary
 
 	current, err := client.getTime()
 	if err != nil {
@@ -109,7 +135,7 @@ func (client *Client) onDatagram(_ string, datagram []byte) {
 		return
 	}
 
-	if delta := timestamp - current; delta < -1 || delta > 1 { // @Hardcoded
+	if delta := timestamp - current; delta < -1000000000 /* ns */ || delta > 1000000000 /* ns */ { // @Hardcoded
 		log.WithFields(log.Fields{"delta": delta}).Warn("Received datagram with invalid timestamp")
 		return
 	}
@@ -134,83 +160,109 @@ func (client *Client) Send(receiver string, data []byte) error {
 	if err != nil {
 		return fmt.Errorf("failed to get time: %v", err)
 	}
-	iv, err := generateSecureRandomByteArray(16)
+	iv, err := generateSecureRandomByteArray(IVSize)
 	if err != nil {
 		return fmt.Errorf("failed to generate iv: %v", err)
 	}
-	datagram := AssembleDatagram(client.config.HostAddress, iv, int64(timestamp)*1e6, data, receiverConfig.Key, receiverConfig.Passphrase)
+	datagram := AssembleDatagram(client.config.HostAddress, iv, timestamp, data, receiverConfig.Key, receiverConfig.Passphrase)
 	client.ps.Publish(fmt.Sprintf("%s/inbox", receiver), datagram)
 	return nil
 }
 
-func (client *Client) getTime() (timestamp int32, err error) {
+func (client *Client) getTime() (timestamp int64, err error) {
 	if client.timeClient != nil {
 		return client.timeClient.getTime()
 	}
-	return int32(time.Now().Unix()), nil
-}
-
-type timeServer struct {
-	config TimeConfiguration
-	ps     PubSubClient
-}
-
-func (server *timeServer) Start() {
-	log.WithFields(log.Fields{"addr": server.config.Address}).Debug("Starting time server")
-	server.ps.Subscribe(fmt.Sprintf("%s/time/request", server.config.Address), server.onRequest)
-}
-
-func (server *timeServer) onRequest(string, []byte) {
-	// @Todo: @Security: Maybe we should start dropping requests, if they come
-	// in too fast, to prevent a DOS attack.
-	timestamp := int32(time.Now().Unix())
-	data := AssembleTime(timestamp, server.config.Passphrase)
-	server.ps.Publish(fmt.Sprintf("%s/time", server.config.Address), data)
-	log.WithFields(log.Fields{"addr": server.config.Address, "timestamp": timestamp}).Debug("Time server sent time")
+	return time.Now().UnixNano(), nil
 }
 
 type timeClient struct {
-	config TimeConfiguration
-	ps     PubSubClient
+	clientAddress    string
+	serverAddress    string
+	serverPassphrase string
+	ps               PubSubClient
 
+	mutex sync.Mutex
+	// The last nonce had the value lastNonce and was sent at local time lastTime.
+	lastNonce []byte
+	lastTime  time.Time
 	// The time server reported baseTimestamp at local time baseTime.
-	baseMutex     sync.Mutex
-	baseTimestamp int32
+	baseTimestamp int64
 	baseTime      time.Time
 }
 
 func (client *timeClient) Start() {
-	log.WithFields(log.Fields{"addr": client.config.Address}).Debug("Starting time client")
-	client.ps.Subscribe(fmt.Sprintf("%s/time", client.config.Address), client.onTime)
+	log.WithFields(log.Fields{"server-addr": client.serverAddress}).Debug("Starting time client")
+	client.ps.Subscribe(fmt.Sprintf("%s/time", client.clientAddress), client.onTimeResponse)
 	client.publishRequest()
 	go client.requestLoop()
 }
 
-func (client *timeClient) onTime(_ string, data []byte) {
-	timestamp, err := DisassembleTime(data, client.config.Passphrase)
+func (client *timeClient) onTimeResponse(channel string, response []byte) {
+	sender, ok := ExtractAddress(response)
+	if !ok {
+		log.Warn("Time client received invalid time response")
+		return
+	}
+	if sender != client.serverAddress {
+		log.WithFields(log.Fields{"sender": sender}).Warn("Time client received time response from unkown time server")
+		return
+	}
+	timestamp, nonce, err := DisassembleTimeResponse(response, sender, client.serverPassphrase)
 	if err != nil {
-		log.Info("Time client received invalid time datagram")
+		log.WithFields(log.Fields{"err": err}).Info("Time client received invalid time response")
 		return
 	}
 
-	client.baseMutex.Lock()
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
+
+	if client.lastNonce == nil || !bytes.Equal(nonce, client.lastNonce) {
+		log.Warn("Time client received invalid time response")
+		return
+	}
+
+	now := time.Now()
+	diff := now.Sub(client.lastTime)
+
+	client.lastNonce = nil
+	client.lastTime = time.Time{}
+
+	if diff > 100*time.Millisecond {
+		log.Warn("Time client received outdated time response")
+		return
+	}
+
 	client.baseTimestamp = timestamp
-	client.baseTime = time.Now()
-	client.baseMutex.Unlock()
-	log.WithFields(log.Fields{"addr": client.config.Address, "timestamp": timestamp}).Debug("Time client received time")
+	client.baseTime = now
+
+	log.WithFields(log.Fields{"addr": client.serverAddress, "timestamp": timestamp}).Debug("Time client received time")
 }
 
 func (client *timeClient) publishRequest() {
-	log.WithFields(log.Fields{"addr": client.config.Address}).Debug("Time client will send request")
-	client.ps.Publish(fmt.Sprintf("%s/time/request", client.config.Address), []byte{}) // empty request
+	nonce, err := generateSecureRandomByteArray(NonceSize)
+	if err != nil {
+		log.WithFields(log.Fields{"addr": client.serverAddress, "err": err}).Warn("Time client failed to generate nonce")
+		return
+	}
+
+	request := AssembleTimeRequest(client.clientAddress, nonce, client.serverPassphrase)
+
+	client.mutex.Lock()
+	client.lastNonce = nonce
+	client.lastTime = time.Now()
+	client.mutex.Unlock()
+
+	log.WithFields(log.Fields{"server-addr": client.serverAddress}).Debug("Time client will send request")
+	client.ps.Publish(fmt.Sprintf("%s/time/request", client.serverAddress), request)
 }
 
 func (client *timeClient) requestLoop() {
 	for {
 		time.Sleep(time.Second)
-		client.baseMutex.Lock()
+		client.mutex.Lock()
 		baseTime := client.baseTime
-		client.baseMutex.Unlock()
+		client.mutex.Unlock()
 		if !baseTime.IsZero() {
 			return // time received, all is well :)
 		}
@@ -218,15 +270,15 @@ func (client *timeClient) requestLoop() {
 	}
 }
 
-func (client *timeClient) getTime() (timestamp int32, err error) {
-	client.baseMutex.Lock()
+func (client *timeClient) getTime() (timestamp int64, err error) {
+	client.mutex.Lock()
 	if client.baseTime.IsZero() {
 		err = errors.New("no time server connection")
 	} else {
 		delta := time.Now().Sub(client.baseTime)
-		timestamp = client.baseTimestamp + int32(delta/time.Second)
+		timestamp = client.baseTimestamp + int64(delta/time.Nanosecond)
 	}
-	client.baseMutex.Unlock()
+	client.mutex.Unlock()
 	return
 }
 

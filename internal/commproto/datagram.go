@@ -11,6 +11,21 @@ import (
 	"errors"
 )
 
+const (
+	// The size of initialization vectors in bytes.
+	IVSize = 16
+	// The size of keys in bytes.
+	KeySize = 16
+	// The size of nonces in bytes.
+	NonceSize = 8
+)
+
+const (
+	addressLengthSize = 1
+	timestampSize     = 8
+	macSize           = sha256.Size
+)
+
 // ExtractAddress returns the address that is stored at the beginning of the message.
 func ExtractAddress(message []byte) (address string, ok bool) {
 	if len(message) == 0 {
@@ -19,32 +34,13 @@ func ExtractAddress(message []byte) (address string, ok bool) {
 
 	length := int(message[0])
 
-	if len(message) < 1+length {
+	if len(message) < addressLengthSize+length {
 		return
 	}
 
-	address = string(message[1 : 1+length])
+	address = string(message[addressLengthSize : addressLengthSize+length])
 	ok = true
 	return
-}
-
-// checkMAC validates the MAC that is stored at the end of the message.
-func checkMAC(message []byte, passphrase string) bool {
-	if len(message) < sha256.Size {
-		return false
-	}
-
-	index := len(message) - sha256.Size
-	content, actualMAC := message[:index], message[index:]
-
-	var expectedMAC []byte
-	{ // Calculate expected MAC.
-		hash := hmac.New(sha256.New, []byte(passphrase))
-		hash.Write(content)
-		expectedMAC = hash.Sum(nil)
-	}
-
-	return hmac.Equal(actualMAC, expectedMAC)
 }
 
 // AssembleDatagram creates a datagram from the given data using the provided encryption secrets.
@@ -53,32 +49,22 @@ func AssembleDatagram(address string, iv []byte, timestamp int64, data []byte, k
 		panic("address too long")
 	}
 
-	if len(iv) != 16 {
+	if len(iv) != IVSize {
 		panic("iv has wrong length")
 	}
 
-	if len(key) != 16 {
+	if len(key) != KeySize {
 		panic("key has wrong length")
 	}
 
 	var buffer bytes.Buffer
-	buffer.WriteByte(byte(len(address))) // length of address
-	buffer.WriteString(address)          // address
-	buffer.Write(iv)                     // initialization vector
+	buffer.WriteByte(byte(len(address)))
+	buffer.WriteString(address)
+	buffer.Write(iv)
 
 	aesStart := buffer.Len()
 
-	// Write timestamp in network byte order (big-endian).
-	buffer.WriteByte(byte(timestamp >> 56))
-	buffer.WriteByte(byte(timestamp >> 48))
-	buffer.WriteByte(byte(timestamp >> 40))
-	buffer.WriteByte(byte(timestamp >> 32))
-	buffer.WriteByte(byte(timestamp >> 24))
-	buffer.WriteByte(byte(timestamp >> 16))
-	buffer.WriteByte(byte(timestamp >> 8))
-	buffer.WriteByte(byte(timestamp >> 0))
-
-	// Write the actual payload data.
+	writeTimestamp(&buffer, timestamp)
 	buffer.Write(data)
 
 	{ // Add PKCS#7 padding.
@@ -101,19 +87,14 @@ func AssembleDatagram(address string, iv []byte, timestamp int64, data []byte, k
 		mode.CryptBlocks(aesBuffer, aesBuffer)       // encrypt in-place
 	}
 
-	{ // Append MAC.
-		hash := hmac.New(sha256.New, []byte(passphrase))
-		hash.Write(buffer.Bytes())
-		mac := hash.Sum(nil)
-		buffer.Write(mac)
-	}
+	writeMAC(&buffer, passphrase)
 
 	return buffer.Bytes()
 }
 
 // DisassembleDatagram validates and decrypts a datagram using the provided encryption secrets.
 func DisassembleDatagram(datagram []byte, address string, key []byte, passphrase string) (timestamp int64, data []byte, err error) {
-	if len(key) != 16 {
+	if len(key) != KeySize {
 		panic("key has wrong length")
 	}
 
@@ -122,10 +103,10 @@ func DisassembleDatagram(datagram []byte, address string, key []byte, passphrase
 		return
 	}
 
-	ivStart := 1 /* address length specification */ + len(address)
-	ivEnd := ivStart + 16
+	ivStart := addressLengthSize + len(address)
+	ivEnd := ivStart + IVSize
 	aesStart := ivEnd
-	aesEnd := len(datagram) - sha256.Size
+	aesEnd := len(datagram) - macSize
 
 	// We expect at least one block of data because of padding and the timestamp.
 	// Also, the length must be a multiple of the block size.
@@ -163,79 +144,133 @@ func DisassembleDatagram(datagram []byte, address string, key []byte, passphrase
 		}
 	}
 
-	if len(aesBuffer)-padding < 8 {
+	if len(aesBuffer)-padding < timestampSize {
 		err = errors.New("invalid datagram")
 		return
 	}
 
-	timestamp += int64(aesBuffer[0]) << 56
-	timestamp += int64(aesBuffer[1]) << 48
-	timestamp += int64(aesBuffer[2]) << 40
-	timestamp += int64(aesBuffer[3]) << 32
-	timestamp += int64(aesBuffer[4]) << 24
-	timestamp += int64(aesBuffer[5]) << 16
-	timestamp += int64(aesBuffer[6]) << 8
-	timestamp += int64(aesBuffer[7]) << 0
-
-	data = aesBuffer[8 : len(aesBuffer)-padding]
-
+	timestamp = decodeTimestamp(aesBuffer[0:timestampSize])
+	data = aesBuffer[timestampSize : len(aesBuffer)-padding]
 	return
 }
 
-func AssembleTime(time int32, passphrase string) []byte {
-	var buffer bytes.Buffer
-
-	// @Todo: Length is not really needed, as this a fixed size datagram, but
-	// this has to be defined in the specification first.
-	length := 4
-	buffer.WriteByte(byte(length >> 8))
-	buffer.WriteByte(byte(length >> 0))
-
-	buffer.WriteByte(byte(time >> 24))
-	buffer.WriteByte(byte(time >> 16))
-	buffer.WriteByte(byte(time >> 8))
-	buffer.WriteByte(byte(time >> 0))
-
-	var mac []byte
-	{ // Calculate MAC.
-		hash := hmac.New(sha256.New, []byte(passphrase))
-		hash.Write(buffer.Bytes()[2 : 2+length])
-		mac = hash.Sum(nil)
+// AssembleTimeRequest creates a time request from the given nonce and passphrase.
+func AssembleTimeRequest(address string, nonce []byte, passphrase string) []byte {
+	if len(nonce) != NonceSize {
+		panic("nonce has wrong length")
 	}
 
-	buffer.Write(mac)
+	var buffer bytes.Buffer
+	buffer.WriteByte(byte(len(address)))
+	buffer.WriteString(address)
+	buffer.Write(nonce)
+	writeMAC(&buffer, passphrase)
+
 	return buffer.Bytes()
 }
 
-func DisassembleTime(data []byte, passphrase string) (int32, error) {
-	if len(data) != 2+4+sha256.Size /* length, payload, mac */ {
-		return 0, errors.New("invalid datagram")
+// DisassembleTimeRequest validates and extracts a time request using the provided passphrase.
+func DisassembleTimeRequest(message []byte, address string, passphrase string) (nonce []byte, err error) {
+	if !checkMAC(message, passphrase) {
+		err = errors.New("invalid message")
+		return
 	}
 
-	high, low := int(data[0]), int(data[1])
-	length := high<<8 + low
-	if length != 4 {
-		return 0, errors.New("invalid datagram")
+	if len(message) != addressLengthSize+len(address)+NonceSize+macSize {
+		err = errors.New("invalid message")
+		return
 	}
 
-	messageMAC := data[2+4:]
+	nonceStart := addressLengthSize + len(address)
+	nonce = message[nonceStart : nonceStart+NonceSize]
+	return
+}
+
+// AssembleTimeResponse creates a time response from the given data and passphrase.
+func AssembleTimeResponse(address string, timestamp int64, nonce []byte, passphrase string) []byte {
+	if len(nonce) != NonceSize {
+		panic("nonce has wrong length")
+	}
+
+	var buffer bytes.Buffer
+	buffer.WriteByte(byte(len(address)))
+	buffer.WriteString(address)
+	writeTimestamp(&buffer, timestamp)
+	buffer.Write(nonce)
+	writeMAC(&buffer, passphrase)
+
+	return buffer.Bytes()
+}
+
+// DisassembleTimeResponse validates and extracts a time response using the provided passphrase.
+func DisassembleTimeResponse(message []byte, address string, passphrase string) (timestamp int64, nonce []byte, err error) {
+	if !checkMAC(message, passphrase) {
+		err = errors.New("invalid message")
+		return
+	}
+
+	if len(message) != addressLengthSize+len(address)+timestampSize+NonceSize+macSize {
+		err = errors.New("invalid message")
+		return
+	}
+
+	timestampStart := addressLengthSize + len(address)
+	timestamp = decodeTimestamp(message[timestampStart : timestampStart+timestampSize])
+	nonceStart := timestampStart + timestampSize
+	nonce = message[nonceStart : nonceStart+NonceSize]
+	return
+}
+
+// writeTimestamp appends the timestamp to the buffer.
+func writeTimestamp(buffer *bytes.Buffer, timestamp int64) {
+	// Write timestamp in network byte order (big-endian).
+	buffer.WriteByte(byte(timestamp >> 56))
+	buffer.WriteByte(byte(timestamp >> 48))
+	buffer.WriteByte(byte(timestamp >> 40))
+	buffer.WriteByte(byte(timestamp >> 32))
+	buffer.WriteByte(byte(timestamp >> 24))
+	buffer.WriteByte(byte(timestamp >> 16))
+	buffer.WriteByte(byte(timestamp >> 8))
+	buffer.WriteByte(byte(timestamp >> 0))
+}
+
+// decodeTimestamp decodes a timestamp written by writeTimestamp.
+// raw must have a length of timestampSize.
+func decodeTimestamp(raw []byte) (timestamp int64) {
+	timestamp += int64(raw[0]) << 56
+	timestamp += int64(raw[1]) << 48
+	timestamp += int64(raw[2]) << 40
+	timestamp += int64(raw[3]) << 32
+	timestamp += int64(raw[4]) << 24
+	timestamp += int64(raw[5]) << 16
+	timestamp += int64(raw[6]) << 8
+	timestamp += int64(raw[7]) << 0
+	return
+}
+
+// writeMAC calculates the MAC of the current contents of buffer and appends it to the end of buffer itself.
+func writeMAC(buffer *bytes.Buffer, passphrase string) {
+	hash := hmac.New(sha256.New, []byte(passphrase))
+	hash.Write(buffer.Bytes())
+	mac := hash.Sum(nil)
+	buffer.Write(mac)
+}
+
+// checkMAC validates the MAC that is stored at the end of the message.
+func checkMAC(message []byte, passphrase string) bool {
+	if len(message) < macSize {
+		return false
+	}
+
+	index := len(message) - macSize
+	content, actualMAC := message[:index], message[index:]
 
 	var expectedMAC []byte
-	{ // Calculate MAC of received data.
+	{ // Calculate expected MAC.
 		hash := hmac.New(sha256.New, []byte(passphrase))
-		hash.Write(data[2 : 2+length])
+		hash.Write(content)
 		expectedMAC = hash.Sum(nil)
 	}
 
-	if !hmac.Equal(messageMAC, expectedMAC) {
-		return 0, errors.New("invalid datagram")
-	}
-
-	time := int32(0)
-	time += int32(data[2]) << 24
-	time += int32(data[3]) << 16
-	time += int32(data[4]) << 8
-	time += int32(data[5]) << 0
-
-	return time, nil
+	return hmac.Equal(actualMAC, expectedMAC)
 }

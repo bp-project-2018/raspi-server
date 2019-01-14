@@ -1,9 +1,5 @@
 {
 	"host-addr": "kalliope",
-	"time-client": {
-		"addr": "public",
-		"passphrase": "Ein Idiot in Uniform ist immer noch ein Idiot."
-	},
 	"partners": {
 		"kronos": {
 			"key": "a9da5962eba6ce63efb6eda18cae2123",

@@ -9,15 +9,10 @@ import (
 )
 
 type ClientConfiguration struct {
-	HostAddress string                          `json:"host-addr"`
-	TimeServer  *TimeConfiguration              `json:"time-server"`
-	TimeClient  *TimeConfiguration              `json:"time-client"`
-	Partners    map[string]PartnerConfiguration `json:"partners"`
-}
-
-type TimeConfiguration struct {
-	Address    string `json:"addr"`
-	Passphrase string `json:"passphrase"`
+	HostAddress    string                          `json:"host-addr"`
+	HostTimeServer bool                            `json:"host-time-server"`
+	UseTimeServer  string                          `json:"use-time-server"`
+	Partners       map[string]PartnerConfiguration `json:"partners"`
 }
 
 type PartnerConfiguration struct {
@@ -64,19 +59,9 @@ func (config *ClientConfiguration) Validate() error {
 		return errors.New("missing 'host-addr'")
 	}
 
-	if config.TimeServer != nil && config.TimeClient != nil {
-		return errors.New("cannot have both 'time-sever' and 'time-client'")
-	}
-
-	if config.TimeServer != nil {
-		if err := config.TimeServer.Validate(); err != nil {
-			return fmt.Errorf("in 'time-sever': %v", err)
-		}
-	}
-
-	if config.TimeClient != nil {
-		if err := config.TimeClient.Validate(); err != nil {
-			return fmt.Errorf("in 'time-client': %v", err)
+	if config.UseTimeServer != "" {
+		if _, ok := config.Partners[config.UseTimeServer]; !ok {
+			return errors.New("time server address not in 'partners'")
 		}
 	}
 
@@ -84,24 +69,14 @@ func (config *ClientConfiguration) Validate() error {
 		if len(partner.Key) == 0 {
 			return fmt.Errorf("missing 'key' for partner '%s'", name)
 		}
-		if len(partner.Key) != 16 {
-			return fmt.Errorf("'key' for partner '%s' has wrong length (expected 16 but was %d)", name, len(partner.Key))
+		if len(partner.Key) != KeySize {
+			return fmt.Errorf("'key' for partner '%s' has wrong length (expected %d but was %d)", name, KeySize, len(partner.Key))
 		}
 		if partner.Passphrase == "" {
 			return fmt.Errorf("missing 'passphrase' for partner '%s'", name)
 		}
 	}
 
-	return nil
-}
-
-func (config *TimeConfiguration) Validate() error {
-	if config.Address == "" {
-		return errors.New("missing 'addr'")
-	}
-	if config.Passphrase == "" {
-		return errors.New("missing 'passphrase'")
-	}
 	return nil
 }
 

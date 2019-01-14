@@ -2,7 +2,6 @@ package commproto
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"encoding/hex"
 	"testing"
 )
@@ -41,44 +40,6 @@ func TestExtractAddressValid(t *testing.T) {
 	}
 }
 
-func TestCheckMACTooShort(t *testing.T) {
-	message := []byte{0, 1, 2, 3}
-
-	ok := checkMAC(message, "passphrase")
-
-	if ok {
-		t.Fatal("checkMAC returned ok for short message")
-	}
-}
-
-func TestCheckMACInvalid(t *testing.T) {
-	message := []byte{0, 1, 2, 3}
-	for i := 0; i < sha256.Size; i++ {
-		message = append(message, 0)
-	}
-
-	ok := checkMAC(message, "passphrase")
-
-	if ok {
-		t.Fatal("checkMAC returned ok for invalid message")
-	}
-}
-
-func TestCheckMACValid(t *testing.T) {
-	// Test Case 2 from RFC 4231.
-	// See: https://tools.ietf.org/html/rfc4231#section-4.3
-	passphrase := "Jefe"
-	content := []byte("what do ya want for nothing?")
-	mac := decodeHex("5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843")
-	message := append(content, mac...)
-
-	ok := checkMAC(message, passphrase)
-
-	if !ok {
-		t.Fatal("checkMAC returned !ok for valid message")
-	}
-}
-
 func TestAssembleDatagram(t *testing.T) {
 	address := "master"
 	iv := decodeHex("00110011001100110011001100110011")
@@ -111,6 +72,44 @@ func TestDisassembleDatagramValid(t *testing.T) {
 	expectedData := `{ value: "Hello, Sailor!" }`
 	if string(data) != expectedData {
 		t.Fatalf("expected '%s', actual '%s'", expectedData, string(data))
+	}
+}
+
+func TestCheckMACTooShort(t *testing.T) {
+	message := []byte{0, 1, 2, 3}
+
+	ok := checkMAC(message, "passphrase")
+
+	if ok {
+		t.Fatal("checkMAC returned ok for short message")
+	}
+}
+
+func TestCheckMACInvalid(t *testing.T) {
+	message := []byte{0, 1, 2, 3}
+	for i := 0; i < macSize; i++ {
+		message = append(message, 0)
+	}
+
+	ok := checkMAC(message, "passphrase")
+
+	if ok {
+		t.Fatal("checkMAC returned ok for invalid message")
+	}
+}
+
+func TestCheckMACValid(t *testing.T) {
+	// Test Case 2 from RFC 4231.
+	// See: https://tools.ietf.org/html/rfc4231#section-4.3
+	passphrase := "Jefe"
+	content := []byte("what do ya want for nothing?")
+	mac := decodeHex("5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843")
+	message := append(content, mac...)
+
+	ok := checkMAC(message, passphrase)
+
+	if !ok {
+		t.Fatal("checkMAC returned !ok for valid message")
 	}
 }
 
