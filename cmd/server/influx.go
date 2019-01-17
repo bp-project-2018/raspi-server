@@ -11,9 +11,9 @@ var influxClient client.Client
 
 func initMetrics() {
 	client, err := client.NewHTTPClient(client.HTTPConfig{
-		Addr:     influxDBHost,
-		Username: username,
-		Password: password,
+		Addr:     influxHost,
+		Username: influxUser,
+		Password: influxPassword,
 	})
 	if err != nil {
 		panic(err)
@@ -33,7 +33,7 @@ func collectMetric(eventType string, fields Fields, tags Tags) {
 			return
 		}
 		bp, err := client.NewBatchPoints(client.BatchPointsConfig{
-			Database:  influxDB,
+			Database:  influxDatabase,
 			Precision: "ns",
 		})
 		if err != nil {

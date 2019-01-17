@@ -18,7 +18,9 @@ func mqttHandler(sender string, datagramType commproto.DatagramType, encoding co
 		return
 	}
 	payload := SensorPayloadFromJSONBuffer(data)
-	fmt.Println(payload)
+	// Collect data
+	fmt.Println(sender, payload)
+	collectMetric("datapoint", Fields{"value": payload.Value}, Tags{"device": sender, "sensor": string(payload.SensorID), "type": payload.Type, "unit": payload.Unit})
 }
 
 func main() {
