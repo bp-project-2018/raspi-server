@@ -20,7 +20,8 @@ func mqttHandler(sender string, datagramType commproto.DatagramType, encoding co
 	payload := SensorPayloadFromJSONBuffer(data)
 	// Collect data
 	fmt.Println(sender, payload)
-	collectMetric("datapoint", Fields{"value": payload.Value}, Tags{"device": sender, "sensor": string(payload.SensorID), "type": payload.Type, "unit": payload.Unit})
+	sensorIDStr := fmt.Sprintf("%d", payload.SensorID)
+	collectMetric("datapoint", Fields{"value": payload.Value}, Tags{"device": sender, "sensor": sensorIDStr, "type": payload.Type, "unit": payload.Unit})
 }
 
 func main() {
@@ -28,7 +29,6 @@ func main() {
 
 	config, err := commproto.ParseConfiguration(networkFile)
 	if err != nil {
-		log.Println()
 		log.Panicln(err)
 	}
 
@@ -38,5 +38,6 @@ func main() {
 	client.Start()
 
 	loadTokens()
+	initMetrics()
 	startWebserver()
 }

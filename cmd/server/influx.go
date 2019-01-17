@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"time"
 
@@ -28,22 +29,37 @@ type Fields map[string]interface{}
 type Tags map[string]string
 
 func collectMetric(eventType string, fields Fields, tags Tags) {
-	go func() {
-		if influxClient == nil {
-			return
-		}
-		bp, err := client.NewBatchPoints(client.BatchPointsConfig{
-			Database:  influxDatabase,
-			Precision: "ns",
-		})
-		if err != nil {
-			log.Fatalln("error: ", err)
-		}
-		pt, err := client.NewPoint(eventType, tags, fields, time.Now())
-		if err != nil {
-			log.Fatalln("error: ", err)
-		}
-		bp.AddPoint(pt)
-		influxClient.Write(bp)
-	}()
+	if influxClient == nil {
+		return
+	}
+	bp, err := client.NewBatchPoints(client.BatchPointsConfig{
+		Database:  influxDatabase,
+		Precision: "ns",
+	})
+	if err != nil {
+		log.Fatalln("error: ", err)
+	}
+	pt, err := client.NewPoint(eventType, tags, fields, time.Now())
+	if err != nil {
+		log.Fatalln("error: ", err)
+	}
+	bp.AddPoint(pt)
+	influxClient.Write(bp)
+}
+
+func queryMetrics(deviceID, sensorID string, from, to time.Time, precision string) [][]interface{} {
+	cmd := fmt.Sprintf("select mean(value) from datapoint where time > %d and time < %d and device = '%s' and sensor = '%s' group by time(%s)", from.UnixNano(), to.UnixNano(), deviceID, sensorID, precision)
+	q := client.Query{
+		Command:  cmd,
+		Database: influxDatabase,
+	}
+
+	resp, err := influxClient.Query(q)
+
+	if err != nil {
+		log.Println("[influx] data query failed:", err)
+		return nil
+	}
+
+	return resp.Results[0].Series[0].Values
 }
