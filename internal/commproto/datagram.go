@@ -156,6 +156,10 @@ func DisassembleDatagram(datagram []byte, address string, key []byte, passphrase
 
 // AssembleTimeRequest creates a time request from the given nonce and passphrase.
 func AssembleTimeRequest(address string, nonce []byte, passphrase string) []byte {
+	if len(address) > 255 {
+		panic("address too long")
+	}
+
 	if len(nonce) != NonceSize {
 		panic("nonce has wrong length")
 	}
@@ -188,6 +192,10 @@ func DisassembleTimeRequest(message []byte, address string, passphrase string) (
 
 // AssembleTimeResponse creates a time response from the given data and passphrase.
 func AssembleTimeResponse(address string, timestamp int64, nonce []byte, passphrase string) []byte {
+	if len(address) > 255 {
+		panic("address too long")
+	}
+
 	if len(nonce) != NonceSize {
 		panic("nonce has wrong length")
 	}
