@@ -2,8 +2,8 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
-	"strconv"
 	"sync/atomic"
 	"time"
 
@@ -23,7 +23,7 @@ func startWebserver() {
 	e.GET("/api/status", getStatus)
 	e.GET("/api/register", getDeviceToken)
 	e.GET("/api/getDevices", getDevices)
-	e.GET("/api/getData", getData)
+	e.POST("/api/queryData", queryData)
 	e.POST("/api/updateDeviceName", postUpdateDeviceName)
 	e.Static("/", "static")
 	e.Logger.Fatal(e.Start(webserverEndpoint))
@@ -67,22 +67,18 @@ func getDevices(c echo.Context) error {
 	return c.JSON(http.StatusOK, generic{"devices": []generic{}})
 }
 
-func getData(c echo.Context) error {
+func queryData(c echo.Context) error {
 	authorized := checkAuthorization(c)
 	if !authorized {
 		return c.JSON(http.StatusOK, generic{"err": "Unauthorized"})
 	}
-	deviceID, sensorID, precision := c.Param("deviceId"), c.Param("sensorId"), c.Param("precision")
-	fromInt, err := strconv.Atoi(c.Param("from"))
+	request := DataQueryRequest{}
+	err := json.NewDecoder(c.Request().Body).Decode(&request)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, generic{"err": "Bad 'from' field"})
+		return c.JSON(http.StatusOK, generic{"err": "Could not decode request"})
 	}
-	toInt, err := strconv.Atoi(c.Param("to"))
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, generic{"err": "Bad 'to' field"})
-	}
-	from, to := time.Unix(int64(fromInt), 0), time.Unix(int64(toInt), 0)
-	res := queryMetrics(deviceID, sensorID, from, to, precision)
+	from, to := time.Unix(int64(request.BeginUnix), 0), time.Unix(int64(request.BeginUnix), 0)
+	res := queryMetrics(request.DeviceID, request.SensorID, from, to, request.ResolutionSeconds)
 	return c.JSON(http.StatusOK, res)
 }
 

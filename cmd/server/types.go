@@ -18,3 +18,12 @@ func SensorPayloadFromJSONBuffer(buffer []byte) SensorPayload {
 	json.Unmarshal(buffer, &p)
 	return p
 }
+
+// DataQueryRequest requests data from the database
+type DataQueryRequest struct {
+	DeviceID          string
+	SensorID          string
+	BeginUnix         int
+	EndUnix           int
+	ResolutionSeconds int
+}
