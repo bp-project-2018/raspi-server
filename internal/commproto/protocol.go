@@ -137,7 +137,7 @@ func (client *Client) onDatagram(_ string, datagram []byte) {
 
 	if delta := timestamp - current; delta < -1000000000 /* ns */ || delta > 1000000000 /* ns */ { // @Hardcoded
 		log.WithFields(log.Fields{"delta": delta}).Warn("Received datagram with invalid timestamp")
-		return
+		// return // @Temporary: Disabled until the time client logic is implemented in the sensor firmware.
 	}
 
 	// @Todo: @Sync: Protect client.callbacks??
