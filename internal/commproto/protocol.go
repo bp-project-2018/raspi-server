@@ -38,6 +38,9 @@ type Client struct {
 	config ClientConfiguration
 	ps     PubSubClient
 
+	lastTimestampMutex sync.Mutex
+	lastTimestamps     map[string]int64
+
 	timeClient *timeClient
 
 	callbacks []DatagramCallback
@@ -47,8 +50,9 @@ type DatagramCallback func(sender string, data []byte)
 
 func NewClient(config *ClientConfiguration, ps PubSubClient) *Client {
 	client := &Client{
-		config: *config,
-		ps:     ps,
+		config:         *config,
+		ps:             ps,
+		lastTimestamps: make(map[string]int64),
 	}
 	if serverAddress := config.UseTimeServer; serverAddress != "" {
 		serverConfig, ok := config.Partners[serverAddress]
@@ -137,6 +141,22 @@ func (client *Client) onDatagram(_ string, datagram []byte) {
 
 	if delta := timestamp - current; delta < -1000000000 /* ns */ || delta > 1000000000 /* ns */ { // @Hardcoded
 		log.WithFields(log.Fields{"delta": delta}).Warn("Received datagram with invalid timestamp")
+		return
+	}
+
+	var timestampOk bool
+	{
+		client.lastTimestampMutex.Lock()
+		last, lastFound := client.lastTimestamps[sender]
+		timestampOk = !lastFound || timestamp > last
+		if timestampOk {
+			client.lastTimestamps[sender] = timestamp
+		}
+		client.lastTimestampMutex.Unlock()
+	}
+
+	if !timestampOk {
+		log.Warn("Received datagram with invalid timestamp")
 		return
 	}
 
