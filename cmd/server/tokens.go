@@ -31,7 +31,7 @@ func generateToken() (token string) {
 
 func addToken(token string) {
 	tokenStorage.Tokens = append(tokenStorage.Tokens, token)
-	log.Println("[tokens] new token added to token storage")
+	log.Printf("[tokens] new token added to token storage (%s)\n", token)
 	saveTokens()
 }
 
@@ -42,7 +42,7 @@ func loadTokens() {
 		log.Println("[tokens] empty token list created")
 	} else {
 		json.Unmarshal(data, &tokenStorage)
-		log.Println("[tokens] token list loaded")
+		log.Printf("[tokens] token list loaded with %d entries\n", len(tokenStorage.Tokens))
 	}
 }
 

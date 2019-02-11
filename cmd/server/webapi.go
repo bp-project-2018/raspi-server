@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"net/http"
 	"sync/atomic"
 	"time"
@@ -26,6 +27,7 @@ func startWebserver() {
 	e.POST("/api/queryData", queryData)
 	e.POST("/api/updateDeviceName", postUpdateDeviceName)
 	e.Static("/", "static")
+	log.Println("[webapi] started http server on " + webserverEndpoint)
 	e.Logger.Fatal(e.Start(webserverEndpoint))
 }
 
@@ -43,9 +45,7 @@ func getStatus(c echo.Context) error {
 }
 
 func getDeviceToken(c echo.Context) error {
-
 	if !atomic.CompareAndSwapInt32(&authorizationLock, 0, 1) {
-		// another authorization process is currently running
 		return c.JSON(http.StatusOK, generic{"err": "Another authorization process is already running"})
 	}
 	defer atomic.StoreInt32(&authorizationLock, 0)

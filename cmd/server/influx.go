@@ -53,13 +53,10 @@ func queryMetrics(deviceID, sensorID string, from, to time.Time, precisionSecond
 		Command:  cmd,
 		Database: influxDatabase,
 	}
-
 	resp, err := influxClient.Query(q)
-
 	if err != nil {
 		log.Println("[influx] data query failed:", err)
 		return nil
 	}
-
 	return resp.Results[0].Series[0].Values
 }
