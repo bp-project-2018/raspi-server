@@ -64,7 +64,7 @@ func getDevices(c echo.Context) error {
 	if !authorized {
 		return c.JSON(http.StatusOK, generic{"err": "Unauthorized"})
 	}
-	return c.JSON(http.StatusOK, generic{"devices": []generic{}})
+	return c.JSON(http.StatusOK, generic{"devices": deviceStorage.Devices})
 }
 
 func queryData(c echo.Context) error {

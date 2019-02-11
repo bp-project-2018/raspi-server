@@ -18,6 +18,9 @@ func sensorDataHandler(sender string, data []byte) {
 	fmt.Println(sender, payload)
 	sensorIDStr := fmt.Sprintf("%d", payload.SensorID)
 	collectMetric("datapoint", Fields{"value": payload.Value}, Tags{"device": sender, "sensor": sensorIDStr, "type": payload.Type, "unit": payload.Unit})
+	// Update device and sensor in device cache if necessary
+	d := getDevice(sender)
+	d.updateSensor(payload.SensorID, payload.Type, payload.Unit)
 }
 
 func main() {
@@ -34,6 +37,7 @@ func main() {
 	client.Start()
 
 	loadTokens()
+	loadDevices()
 	initMetrics()
 	startWebserver()
 }
