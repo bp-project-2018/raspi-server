@@ -38,8 +38,11 @@ type Client struct {
 	config ClientConfiguration
 	ps     PubSubClient
 
-	lastTimestampMutex sync.Mutex
-	lastTimestamps     map[string]int64
+	lastSentTimestampMutex sync.Mutex
+	lastSentTimestamps map[string]int64
+
+	lastReceivedTimestampMutex sync.Mutex
+	lastReceivedTimestamps     map[string]int64
 
 	timeClient *timeClient
 
@@ -52,7 +55,8 @@ func NewClient(config *ClientConfiguration, ps PubSubClient) *Client {
 	client := &Client{
 		config:         *config,
 		ps:             ps,
-		lastTimestamps: make(map[string]int64),
+		lastSentTimestamps: make(map[string]int64),
+		lastReceivedTimestamps: make(map[string]int64),
 	}
 	if serverAddress := config.UseTimeServer; serverAddress != "" {
 		serverConfig, ok := config.Partners[serverAddress]
@@ -146,13 +150,13 @@ func (client *Client) onDatagram(_ string, datagram []byte) {
 
 	var timestampOk bool
 	{
-		client.lastTimestampMutex.Lock()
-		last, lastFound := client.lastTimestamps[sender]
+		client.lastReceivedTimestampMutex.Lock()
+		last, lastFound := client.lastReceivedTimestamps[sender]
 		timestampOk = !lastFound || timestamp > last
 		if timestampOk {
-			client.lastTimestamps[sender] = timestamp
+			client.lastReceivedTimestamps[sender] = timestamp
 		}
-		client.lastTimestampMutex.Unlock()
+		client.lastReceivedTimestampMutex.Unlock()
 	}
 
 	if !timestampOk {
@@ -180,6 +184,17 @@ func (client *Client) Send(receiver string, data []byte) error {
 	if err != nil {
 		return fmt.Errorf("failed to get time: %v", err)
 	}
+
+	{
+		client.lastSentTimestampMutex.Lock()
+		last, lastFound := client.lastSentTimestamps[receiver]
+		if lastFound && timestamp == last {
+			timestamp++
+		}
+		client.lastSentTimestamps[receiver] = timestamp
+		client.lastSentTimestampMutex.Unlock()
+	}
+
 	iv, err := generateSecureRandomByteArray(IVSize)
 	if err != nil {
 		return fmt.Errorf("failed to generate iv: %v", err)
