@@ -1,8 +1,12 @@
-/cmd/server/server
-/cmd/server/server.exe
-/cmd/server/config
+# executables
+/cmd/fakesensor/fakesensor
+/cmd/fakesensor/fakesensor.exe
 /cmd/protoclient/protoclient
 /cmd/protoclient/protoclient.exe
+/cmd/server/server
+/cmd/server/server.exe
+
+/cmd/server/config
 
 # webinterface folder
 /static/

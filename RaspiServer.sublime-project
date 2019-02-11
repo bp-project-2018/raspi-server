@@ -26,6 +26,15 @@
 			}
 		},
 		{
+			"name": "Build fakesensor",
+			"working_dir": "$project_path/cmd/fakesensor",
+			"shell_cmd": "go build || exit 0",
+			"file_regex": "^(.+?):(\\d+?):(\\d+)?: (.+)$",
+			"windows": {
+				"shell_cmd": "go build || exit /b 0"
+			}
+		},
+		{
 			"name": "Test commproto",
 			"working_dir": "$project_path/internal/commproto",
 			"shell_cmd": "go test || exit 0",
