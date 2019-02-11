@@ -51,6 +51,14 @@
 			"windows": {
 				"shell_cmd": "cmd /C \"set GOOS=linux&set GOARCH=arm&go build\" && bash -c \"rsync -rtv protoclient pi@kronos.local:\" || exit /b 0"
 			}
+		},
+		{
+			"name": "Upload webinterface",
+			"working_dir": "$project_path",
+			"shell_cmd": "rsync -rtv --exclude='.git' static pi@kronos.local: || exit 0",
+			"windows": {
+				"shell_cmd": "bash -c \"rsync -rtv --exclude='.git' static pi@kronos.local:\" || exit /b 0"
+			}
 		}
 	]
 }
