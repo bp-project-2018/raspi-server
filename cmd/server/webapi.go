@@ -77,9 +77,9 @@ func queryData(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusOK, generic{"err": "Could not decode request"})
 	}
-	from, to := time.Unix(int64(request.BeginUnix), 0), time.Unix(int64(request.BeginUnix), 0)
+	from, to := time.Unix(int64(request.BeginUnix), 0), time.Unix(int64(request.EndUnix), 0)
 	res := queryMetrics(request.DeviceID, request.SensorID, from, to, request.ResolutionSeconds)
-	return c.JSON(http.StatusOK, res)
+	return c.JSON(http.StatusOK, generic{"datapoints": res})
 }
 
 func postUpdateDeviceName(c echo.Context) error {
