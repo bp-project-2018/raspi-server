@@ -4,6 +4,9 @@
 /cmd/protoclient/protoclient
 /cmd/protoclient/protoclient.exe
 
+# webinterface folder
+/static/
+
 *.sublime-workspace
 
 .DS_Store
