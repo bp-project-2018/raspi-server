@@ -1,6 +1,5 @@
 {
 	"host-addr": "shredder",
-	"host-time-server": true,
 	"partners": {
 		"kronos": {
 			"key": "e8c4e4830a9cfc1b05bed9a2f5590810",

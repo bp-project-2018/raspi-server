@@ -1,6 +1,6 @@
 {
 	"host-addr": "kronos",
-	"use-time-server": "shredder",
+	"host-time-server": true,
 	"partners": {
 		"shredder": {
 			"key": "e8c4e4830a9cfc1b05bed9a2f5590810",
@@ -8,7 +8,15 @@
 		},
 		"kalliope": {
 			"key": "a9da5962eba6ce63efb6eda18cae2123",
-			"passphrase": "Ich hätte gerne einen Whopper."
+			"passphrase": "Ich haette gerne einen Whopper."
+		},
+		"max": {
+			"key": "3b0e5c2df5c80e8616d7255bbe76199e",
+			"passphrase": "max@germany.de"
+		},
+		"peter": {
+			"key": "1415e1d4ac160630c8eb9f63deffafbb",
+			"passphrase": "Peter Arbeitsloser."
 		}
 	}
 }
