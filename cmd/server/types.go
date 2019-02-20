@@ -22,7 +22,7 @@ func SensorPayloadFromJSONBuffer(buffer []byte) SensorPayload {
 // DataQueryRequest requests data from the database
 type DataQueryRequest struct {
 	DeviceID          string
-	SensorID          string
+	SensorID          int
 	BeginUnix         int
 	EndUnix           int
 	ResolutionSeconds int

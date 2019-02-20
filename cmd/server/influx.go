@@ -47,8 +47,8 @@ func collectMetric(eventType string, fields Fields, tags Tags) {
 	influxClient.Write(bp)
 }
 
-func queryMetrics(deviceID, sensorID string, from, to time.Time, precisionSeconds int) [][]interface{} {
-	cmd := fmt.Sprintf("select mean(value) from datapoint where time > %d and time < %d and device = '%s' and sensor = '%s' group by time(%ds)", from.UnixNano(), to.UnixNano(), deviceID, sensorID, precisionSeconds)
+func queryMetrics(deviceID string, sensorID int, from, to time.Time, precisionSeconds int) [][]interface{} {
+	cmd := fmt.Sprintf("select mean(value) from datapoint where time > %d and time < %d and device = '%s' and sensor = '%d' group by time(%ds)", from.UnixNano(), to.UnixNano(), deviceID, sensorID, precisionSeconds)
 	q := client.Query{
 		Command:  cmd,
 		Database: influxDatabase,
