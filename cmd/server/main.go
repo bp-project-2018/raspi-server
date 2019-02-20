@@ -5,11 +5,16 @@ package main
 
 import (
 	"fmt"
-	"log"
+	log "github.com/sirupsen/logrus"
+	"flag"
 	"os"
 
 	"github.com/iot-bp-project-2018/raspi-server/internal/commproto"
 	"github.com/iot-bp-project-2018/raspi-server/internal/mqttclient"
+)
+
+var (
+	verboseFlag = flag.Bool("verbose", false, "enable detailed logging")
 )
 
 func sensorDataHandler(sender string, data []byte) {
@@ -24,6 +29,12 @@ func sensorDataHandler(sender string, data []byte) {
 }
 
 func main() {
+	flag.Parse()
+
+	if *verboseFlag {
+		log.SetLevel(log.DebugLevel)
+	}
+
 	os.MkdirAll(configDirectory, 0755)
 
 	config, err := commproto.ParseConfiguration(networkFile)
