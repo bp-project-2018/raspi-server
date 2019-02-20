@@ -10,6 +10,10 @@
 			"key": "a9da5962eba6ce63efb6eda18cae2123",
 			"passphrase": "Ich haette gerne einen Whopper."
 		},
+		"juliamueller": {
+			"key": "dd373c072754b3a8d6c7e3d8f60cbf5a",
+			"passphrase": "Die Kuh die lacht."
+		},
 		"max": {
 			"key": "3b0e5c2df5c80e8616d7255bbe76199e",
 			"passphrase": "max@germany.de"
@@ -17,6 +21,10 @@
 		"peter": {
 			"key": "1415e1d4ac160630c8eb9f63deffafbb",
 			"passphrase": "Peter Arbeitsloser."
+		},
+		"marcuwe": {
+			"key": "a4bc60a8bacb817afe2903d1ddad2fcc",
+			"passphrase": "Parkwaechter grillen."
 		}
 	}
 }
