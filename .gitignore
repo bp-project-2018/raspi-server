@@ -1,6 +1,8 @@
 # executables
 /cmd/fakesensor/fakesensor
 /cmd/fakesensor/fakesensor.exe
+/cmd/pinger/pinger
+/cmd/pinger/pinger.exe
 /cmd/protoclient/protoclient
 /cmd/protoclient/protoclient.exe
 /cmd/server/server

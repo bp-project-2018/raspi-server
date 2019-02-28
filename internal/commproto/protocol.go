@@ -39,7 +39,7 @@ type Client struct {
 	ps     PubSubClient
 
 	lastSentTimestampMutex sync.Mutex
-	lastSentTimestamps map[string]int64
+	lastSentTimestamps     map[string]int64
 
 	lastReceivedTimestampMutex sync.Mutex
 	lastReceivedTimestamps     map[string]int64
@@ -53,9 +53,9 @@ type DatagramCallback func(sender string, data []byte)
 
 func NewClient(config *ClientConfiguration, ps PubSubClient) *Client {
 	client := &Client{
-		config:         *config,
-		ps:             ps,
-		lastSentTimestamps: make(map[string]int64),
+		config:                 *config,
+		ps:                     ps,
+		lastSentTimestamps:     make(map[string]int64),
 		lastReceivedTimestamps: make(map[string]int64),
 	}
 	if serverAddress := config.UseTimeServer; serverAddress != "" {

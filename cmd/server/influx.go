@@ -72,7 +72,7 @@ func queryMetrics(deviceID string, sensorID int, from, to time.Time, precisionSe
 		return nil
 	}
 	for i, message := range result.Messages {
-		log.Printf("[influx] data query message %d (%s): %s", i + 1, message.Level, message.Text)
+		log.Printf("[influx] data query message %d (%s): %s", i+1, message.Level, message.Text)
 	}
 	if len(result.Series) == 0 {
 		log.Println("[influx] data query returned no series")

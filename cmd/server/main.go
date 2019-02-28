@@ -4,8 +4,8 @@
 package main
 
 import (
-	"fmt"
 	"flag"
+	"fmt"
 	"os"
 
 	"github.com/iot-bp-project-2018/raspi-server/internal/commproto"

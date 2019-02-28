@@ -35,6 +35,15 @@
 			}
 		},
 		{
+			"name": "Build pinger",
+			"working_dir": "$project_path/cmd/pinger",
+			"shell_cmd": "go build || exit 0",
+			"file_regex": "^(.+?):(\\d+?):(\\d+)?: (.+)$",
+			"windows": {
+				"shell_cmd": "go build || exit /b 0"
+			}
+		},
+		{
 			"name": "Test commproto",
 			"working_dir": "$project_path/internal/commproto",
 			"shell_cmd": "go test || exit 0",
@@ -59,6 +68,15 @@
 			"file_regex": "^(.+?):(\\d+?):(\\d+)?: (.+)$",
 			"windows": {
 				"shell_cmd": "cmd /C \"set GOOS=linux&set GOARCH=arm&go build\" && bash -c \"rsync -rtv protoclient pi@kronos.local:\" || exit /b 0"
+			}
+		},
+		{
+			"name": "Package and Upload pinger",
+			"working_dir": "$project_path/cmd/pinger",
+			"shell_cmd": "env GOOS=linux GOARCH=arm go build && rsync -rtv pinger pi@kronos.local: || exit 0",
+			"file_regex": "^(.+?):(\\d+?):(\\d+)?: (.+)$",
+			"windows": {
+				"shell_cmd": "cmd /C \"set GOOS=linux&set GOARCH=arm&go build\" && bash -c \"rsync -rtv pinger pi@kronos.local:\" || exit /b 0"
 			}
 		},
 		{
