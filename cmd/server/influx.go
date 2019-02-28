@@ -58,5 +58,25 @@ func queryMetrics(deviceID string, sensorID int, from, to time.Time, precisionSe
 		log.Println("[influx] data query failed:", err)
 		return nil
 	}
-	return resp.Results[0].Series[0].Values
+	if resp.Err != "" {
+		log.Println("[influx] data query returned error:", resp.Err)
+		return nil
+	}
+	if len(resp.Results) == 0 {
+		log.Println("[influx] data query returned no results")
+		return nil
+	}
+	result := resp.Results[0]
+	if result.Err != "" {
+		log.Println("[influx] data query result returned error:", result.Err)
+		return nil
+	}
+	for i, message := range result.Messages {
+		log.Printf("[influx] data query message %d (%s): %s", i + 1, message.Level, message.Text)
+	}
+	if len(result.Series) == 0 {
+		log.Println("[influx] data query returned no series")
+		return nil
+	}
+	return result.Series[0].Values
 }
