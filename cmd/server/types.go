@@ -21,9 +21,18 @@ func SensorPayloadFromJSONBuffer(buffer []byte) SensorPayload {
 
 // DataQueryRequest requests data from the database
 type DataQueryRequest struct {
-	DeviceID          string
-	SensorID          int
-	BeginUnix         int
-	EndUnix           int
-	ResolutionSeconds int
+	DeviceID          string `json:"deviceId"`
+	SensorID          int    `json:"sensorId"`
+	BeginUnix         int    `json:"beginId"`
+	EndUnix           int    `json:"endUnix"`
+	ResolutionSeconds int    `json:"resolutionSeconds"`
+}
+
+// RelativeDataQueryRequest requests data from the database
+type RelativeDataQueryRequest struct {
+	DeviceID             string `json:"deviceId"`
+	SensorID             int    `json:"sensorId"`
+	BeginRelativeSeconds int    `json:"beginRelativeSeconds"`
+	EndRelativeSeconds   int    `json:"endRelativeSeconds"`
+	ResolutionSeconds    int    `json:"resolutionSeconds"`
 }

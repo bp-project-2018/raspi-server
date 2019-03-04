@@ -25,6 +25,7 @@ func startWebserver() {
 	e.GET("/api/register", getDeviceToken)
 	e.GET("/api/getDevices", getDevices)
 	e.POST("/api/queryData", queryData)
+	e.POST("/api/queryDataRelative", queryDataRelative)
 	e.POST("/api/updateDeviceName", postUpdateDeviceName)
 	e.Static("/", "static")
 	log.Println("[webapi] started http server on " + webserverEndpoint)
@@ -78,6 +79,23 @@ func queryData(c echo.Context) error {
 		return c.JSON(http.StatusOK, generic{"err": "Could not decode request"})
 	}
 	from, to := time.Unix(int64(request.BeginUnix), 0), time.Unix(int64(request.EndUnix), 0)
+	res := queryMetrics(request.DeviceID, request.SensorID, from, to, request.ResolutionSeconds)
+	return c.JSON(http.StatusOK, generic{"datapoints": res})
+}
+
+func queryDataRelative(c echo.Context) error {
+	authorized := checkAuthorization(c)
+	if !authorized {
+		return c.JSON(http.StatusOK, generic{"err": "Unauthorized"})
+	}
+	request := RelativeDataQueryRequest{}
+	err := json.NewDecoder(c.Request().Body).Decode(&request)
+	if err != nil {
+		return c.JSON(http.StatusOK, generic{"err": "Could not decode request"})
+	}
+	now := time.Now()
+	from := now.Add(time.Second * time.Duration(request.BeginRelativeSeconds))
+	to := now.Add(time.Second * time.Duration(request.EndRelativeSeconds))
 	res := queryMetrics(request.DeviceID, request.SensorID, from, to, request.ResolutionSeconds)
 	return c.JSON(http.StatusOK, generic{"datapoints": res})
 }
