@@ -97,7 +97,7 @@ func queryDataRelative(c echo.Context) error {
 	from := now.Add(time.Second * time.Duration(request.BeginRelativeSeconds))
 	to := now.Add(time.Second * time.Duration(request.EndRelativeSeconds))
 	res := queryMetrics(request.DeviceID, request.SensorID, from, to, request.ResolutionSeconds)
-	return c.JSON(http.StatusOK, generic{"datapoints": res})
+	return c.JSON(http.StatusOK, generic{"datapoints": res, "relativeTime": now})
 }
 
 func postUpdateDeviceName(c echo.Context) error {
