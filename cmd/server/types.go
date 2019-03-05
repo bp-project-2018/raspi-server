@@ -23,7 +23,7 @@ func SensorPayloadFromJSONBuffer(buffer []byte) SensorPayload {
 type DataQueryRequest struct {
 	DeviceID          string `json:"deviceId"`
 	SensorID          int    `json:"sensorId"`
-	BeginUnix         int    `json:"beginId"`
+	BeginUnix         int    `json:"beginUnix"`
 	EndUnix           int    `json:"endUnix"`
 	ResolutionSeconds int    `json:"resolutionSeconds"`
 }
