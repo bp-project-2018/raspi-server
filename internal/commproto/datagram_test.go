@@ -75,6 +75,56 @@ func TestDisassembleDatagramValid(t *testing.T) {
 	}
 }
 
+func TestAssembleTimeRequestValid(t *testing.T) {
+	result := AssembleTimeRequest("master", []byte{ 0, 1, 2, 3, 4, 5, 6, 7 }, "passphrase")
+
+	expected := decodeHex("066d61737465720001020304050607076cf58d9a1ef7f29e4c7cc82f470273a1049d3d0df81ce706f8c21b8271be3e")
+	if !bytes.Equal(result, expected) {
+		t.Fatalf("AssembleTimeRequest: expected (top) vs actual (bottom):\n%x\n%x\n", expected, result)
+	}
+}
+
+func TestDisassembleTimeRequestValid(t *testing.T) {
+	request := decodeHex("066d61737465720001020304050607076cf58d9a1ef7f29e4c7cc82f470273a1049d3d0df81ce706f8c21b8271be3e")
+
+	resultNonce, err := DisassembleTimeRequest(request, "master", "passphrase")
+
+	if err != nil {
+		t.Fatalf("DisassembleTimeRequest returned err for valid request: %v", err)
+	}
+	expectedNonce := []byte{ 0, 1, 2, 3, 4, 5, 6, 7 }
+	if !bytes.Equal(resultNonce, expectedNonce) {
+		t.Fatalf("DisassembleTimeRequest: expected %8x, actual %8x", expectedNonce, resultNonce)
+	}
+}
+
+func TestAssembleTimeResponseValid(t *testing.T) {
+	result := AssembleTimeResponse("master", 0x0123456701234567, []byte{ 0, 1, 2, 3, 4, 5, 6, 7 }, "passphrase")
+
+	expected := decodeHex("066d6173746572012345670123456700010203040506078320414e9fefc84ea3a4b6c96adc4517833941b6e80735bca56eb54a6cfdee32")
+	if !bytes.Equal(result, expected) {
+		t.Fatalf("AssembleTimeResponse: expected (top) vs actual (bottom):\n%x\n%x\n", expected, result)
+	}
+}
+
+func TestDisassembleTimeResponseValid(t *testing.T) {
+	response := decodeHex("066d6173746572012345670123456700010203040506078320414e9fefc84ea3a4b6c96adc4517833941b6e80735bca56eb54a6cfdee32")
+
+	timestamp, nonce, err := DisassembleTimeResponse(response, "master", "passphrase")
+
+	if err != nil {
+		t.Fatalf("DisassembleTimeResponse returned err for valid response: %v", err)
+	}
+	expectedTimestamp := int64(0x0123456701234567)
+	if timestamp != expectedTimestamp {
+		t.Fatalf("DisassembleTimeResponse: expected timestamp %16x, actual timestamp %16x", expectedTimestamp, timestamp)
+	}
+	expectedNonce := []byte{ 0, 1, 2, 3, 4, 5, 6, 7 }
+	if !bytes.Equal(nonce, expectedNonce) {
+		t.Fatalf("DisassembleTimeResponse: expected nonce %8x, actual nonce %8x", expectedNonce, nonce)
+	}
+}
+
 func TestCheckMACTooShort(t *testing.T) {
 	message := []byte{0, 1, 2, 3}
 
