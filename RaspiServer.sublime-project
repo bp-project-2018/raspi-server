@@ -81,7 +81,7 @@
 		},
 		{
 			"name": "Upload webinterface",
-			"working_dir": "$project_path",
+			"working_dir": "$project_path/cmd/server",
 			"shell_cmd": "rsync -rtv --exclude='.git' static pi@kronos.local: || exit 0",
 			"windows": {
 				"shell_cmd": "bash -c \"rsync -rtv --exclude='.git' static pi@kronos.local:\" || exit /b 0"

@@ -10,9 +10,6 @@
 
 /cmd/server/config
 
-# webinterface folder
-/static/
-
 *.sublime-workspace
 
 .DS_Store
