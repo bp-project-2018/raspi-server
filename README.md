@@ -10,4 +10,6 @@ The communication protocol is documented in [`/doc/Protocol.md.html`](https://ra
 
 Some example network configurations are provided in [`/cmd/examples`](cmd/examples).
 
-Instructions on how to use the Server/ Webinterface are available in the [User Guide](doc/User-Guide.pdf)
+Instructions on how to use the Server/ Webinterface are available in the [User Guide](doc/User-Guide.pdf).
+
+The image of a working installation can be found in the [releases section](https://github.com/iot-bp-project-2018/raspi-server/releases).
