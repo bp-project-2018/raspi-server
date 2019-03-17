@@ -5,7 +5,6 @@ package mqttclient
 import (
 	"fmt"
 	"os"
-	"strings"
 	"sync"
 	"time"
 
@@ -36,6 +35,7 @@ func NewMQTTClientWithServer(server string) commproto.PubSubClient {
 	options := mqtt.NewClientOptions()
 	options.AddBroker(server)
 	options.SetClientID(getClientID())
+	options.SetConnectTimeout(1 * time.Second)
 	return NewMQTTClientWithOptions(options)
 }
 
@@ -127,9 +127,7 @@ func (c *mqttClient) connect() {
 			return
 		}
 		message := token.Error().Error()
-		if !strings.HasSuffix(message, "connect: connection refused") {
-			log.Println("Connect error:", message)
-		}
+		log.Warnln("Connect error:", message)
 		time.Sleep(10 * time.Second)
 	}
 }
