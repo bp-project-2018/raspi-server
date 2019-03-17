@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"regexp"
 	"sync/atomic"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 type generic map[string]interface{}
 
 var authorizationLock int32
+var alphanumeric = regexp.MustCompile("^[a-zA-Z0-9_]+$")
 
 func startWebserver() {
 	e := echo.New()
@@ -78,6 +80,9 @@ func queryData(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusOK, generic{"err": "Could not decode request"})
 	}
+	if !alphanumeric.MatchString(request.DeviceID) {
+		return c.JSON(http.StatusOK, generic{"err": "Bad device id field in request"})
+	}
 	from, to := time.Unix(int64(request.BeginUnix), 0), time.Unix(int64(request.EndUnix), 0)
 	res := queryMetrics(request.DeviceID, request.SensorID, from, to, request.ResolutionSeconds)
 	return c.JSON(http.StatusOK, generic{"datapoints": res})
@@ -92,6 +97,9 @@ func queryDataRelative(c echo.Context) error {
 	err := json.NewDecoder(c.Request().Body).Decode(&request)
 	if err != nil {
 		return c.JSON(http.StatusOK, generic{"err": "Could not decode request"})
+	}
+	if !alphanumeric.MatchString(request.DeviceID) {
+		return c.JSON(http.StatusOK, generic{"err": "Bad device id field in request"})
 	}
 	now := time.Now()
 	from := now.Add(time.Second * time.Duration(request.BeginRelativeSeconds))
