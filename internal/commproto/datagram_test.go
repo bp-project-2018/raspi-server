@@ -55,6 +55,66 @@ func TestAssembleDatagram(t *testing.T) {
 	}
 }
 
+func TestDisassembleDatagramInvalidMAC(t *testing.T) {
+	datagram := decodeHex("066d617374657200110011001100110011001100110011b349503ac3f01a2cfb742313fa1cd6f26785b42e71dde6ac66c9f28269b18d7d6d01e92ddb3b411dab40e6b0144487130000000000000000000000000000000000000000000000000000000000000000")
+	address := "master"
+	key := decodeHex("00112233445566778899aabbccddeeff")
+
+	_, _, err := DisassembleDatagram(datagram, address, key, "passphrase")
+
+	if err == nil {
+		t.Fatalf("DisassembleDatagram failed to report invalid mac")
+	}
+}
+
+func TestDisassembleDatagramInvalidPaddingLength(t *testing.T) {
+	datagram := decodeHex("066d617374657200110011001100110011001100110011b349503ac3f01a2cfb742313fa1cd6f26785b42e71dde6ac66c9f28269b18d7d8f8748f9eb6e4cd3ce29afeb8b38942ee4d2e6999c49d73b02315be04ef61495a488fa2bec0d0b70899cde15875d1273")
+	address := "master"
+	key := decodeHex("00112233445566778899aabbccddeeff")
+
+	_, _, err := DisassembleDatagram(datagram, address, key, "passphrase")
+
+	if err == nil {
+		t.Fatalf("DisassembleDatagram failed to report invalid padding")
+	}
+}
+
+func TestDisassembleDatagramInvalidPadding(t *testing.T) {
+	datagram := decodeHex("066d617374657200110011001100110011001100110011b349503ac3f01a2cfb742313fa1cd6f26785b42e71dde6ac66c9f28269b18d7d70530e11d84f90f125de99c7a1f0ff1b3da274df59ab98d07e24e9ce3e75ba6601ecc5c4c90a1df529ef5d9975b49d07")
+	address := "master"
+	key := decodeHex("00112233445566778899aabbccddeeff")
+
+	_, _, err := DisassembleDatagram(datagram, address, key, "passphrase")
+
+	if err == nil {
+		t.Fatalf("DisassembleDatagram failed to report invalid padding")
+	}
+}
+
+func TestDisassembleDatagramInvalidAESPayload(t *testing.T) {
+	datagram := decodeHex("066d617374657200110011001100110011001100110011ffe0c6c579c4e6ccc18ce0ea17f3c7725fc1f301081ffaa26fd95a205f276e783f6ad5ec2c52fd398bc75c8ff208d17c03dec174b42d96474ea437b9a3e23a7273dd2bbac0b331f49d82498cc122b3485fc55cc390d14d0d")
+	address := "master"
+	key := decodeHex("00112233445566778899aabbccddeeff")
+
+	_, _, err := DisassembleDatagram(datagram, address, key, "passphrase")
+
+	if err == nil {
+		t.Fatalf("DisassembleDatagram failed to report invalid aes payload")
+	}
+}
+
+func TestDisassembleDatagramEmptyPayload(t *testing.T) {
+	datagram := decodeHex("066d6173746572001100110011001100110011001100115c405f9e049d560929aa439252acbc82e99bc83f86fd517c7243f1b0531c5dd804958bc750dd2b716e1c67b73c2f76d1")
+	address := "master"
+	key := decodeHex("00112233445566778899aabbccddeeff")
+
+	_, _, err := DisassembleDatagram(datagram, address, key, "passphrase")
+
+	if err == nil {
+		t.Fatalf("DisassembleDatagram failed to report empty payload")
+	}
+}
+
 func TestDisassembleDatagramValid(t *testing.T) {
 	datagram := decodeHex("066d617374657200110011001100110011001100110011b349503ac3f01a2cfb742313fa1cd6f26785b42e71dde6ac66c9f28269b18d7d6d01e92ddb3b411dab40e6b0144487138561ec2353ce7c30c79b7b18312a1c0d7f67160a53c7e905b465ef2ac6c3c49c")
 	address := "master"
@@ -76,11 +136,31 @@ func TestDisassembleDatagramValid(t *testing.T) {
 }
 
 func TestAssembleTimeRequestValid(t *testing.T) {
-	result := AssembleTimeRequest("master", []byte{ 0, 1, 2, 3, 4, 5, 6, 7 }, "passphrase")
+	result := AssembleTimeRequest("master", []byte{0, 1, 2, 3, 4, 5, 6, 7}, "passphrase")
 
 	expected := decodeHex("066d61737465720001020304050607076cf58d9a1ef7f29e4c7cc82f470273a1049d3d0df81ce706f8c21b8271be3e")
 	if !bytes.Equal(result, expected) {
 		t.Fatalf("AssembleTimeRequest: expected (top) vs actual (bottom):\n%x\n%x\n", expected, result)
+	}
+}
+
+func TestDisassembleTimeRequestInvalidMAC(t *testing.T) {
+	request := decodeHex("066d617374657200010203040506070000000000000000000000000000000000000000000000000000000000000000")
+
+	_, err := DisassembleTimeRequest(request, "master", "passphrase")
+
+	if err == nil {
+		t.Fatalf("DisassembleTimeRequest failed to report invalid mac")
+	}
+}
+
+func TestDisassembleTimeRequestInvalidSize(t *testing.T) {
+	request := decodeHex("066d617374657200010203572b77369c93ac1c91020ea544af827123ace671e5cfb44c2db4a96758075c68")
+
+	_, err := DisassembleTimeRequest(request, "master", "passphrase")
+
+	if err == nil {
+		t.Fatalf("DisassembleTimeRequest failed to report invalid size")
 	}
 }
 
@@ -92,18 +172,38 @@ func TestDisassembleTimeRequestValid(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DisassembleTimeRequest returned err for valid request: %v", err)
 	}
-	expectedNonce := []byte{ 0, 1, 2, 3, 4, 5, 6, 7 }
+	expectedNonce := []byte{0, 1, 2, 3, 4, 5, 6, 7}
 	if !bytes.Equal(resultNonce, expectedNonce) {
 		t.Fatalf("DisassembleTimeRequest: expected %8x, actual %8x", expectedNonce, resultNonce)
 	}
 }
 
 func TestAssembleTimeResponseValid(t *testing.T) {
-	result := AssembleTimeResponse("master", 0x0123456701234567, []byte{ 0, 1, 2, 3, 4, 5, 6, 7 }, "passphrase")
+	result := AssembleTimeResponse("master", 0x0123456701234567, []byte{0, 1, 2, 3, 4, 5, 6, 7}, "passphrase")
 
 	expected := decodeHex("066d6173746572012345670123456700010203040506078320414e9fefc84ea3a4b6c96adc4517833941b6e80735bca56eb54a6cfdee32")
 	if !bytes.Equal(result, expected) {
 		t.Fatalf("AssembleTimeResponse: expected (top) vs actual (bottom):\n%x\n%x\n", expected, result)
+	}
+}
+
+func TestDisassembleTimeResponseInvalidMAC(t *testing.T) {
+	response := decodeHex("066d6173746572012345670123456700010203040506070000000000000000000000000000000000000000000000000000000000000000")
+
+	_, _, err := DisassembleTimeResponse(response, "master", "passphrase")
+
+	if err == nil {
+		t.Fatalf("DisassembleTimeResponse failed to report invalid mac")
+	}
+}
+
+func TestDisassembleTimeResponseInvalidSize(t *testing.T) {
+	response := decodeHex("066d61737465720123456701234567000102039add3d394cbdb84fb0af8fc9fb820a4d6c8b16bddd2a3191d502821fff3cf392")
+
+	_, _, err := DisassembleTimeResponse(response, "master", "passphrase")
+
+	if err == nil {
+		t.Fatalf("DisassembleTimeResponse failed to report invalid size")
 	}
 }
 
@@ -119,7 +219,7 @@ func TestDisassembleTimeResponseValid(t *testing.T) {
 	if timestamp != expectedTimestamp {
 		t.Fatalf("DisassembleTimeResponse: expected timestamp %16x, actual timestamp %16x", expectedTimestamp, timestamp)
 	}
-	expectedNonce := []byte{ 0, 1, 2, 3, 4, 5, 6, 7 }
+	expectedNonce := []byte{0, 1, 2, 3, 4, 5, 6, 7}
 	if !bytes.Equal(nonce, expectedNonce) {
 		t.Fatalf("DisassembleTimeResponse: expected nonce %8x, actual nonce %8x", expectedNonce, nonce)
 	}
