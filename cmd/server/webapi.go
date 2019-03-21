@@ -22,6 +22,7 @@ func startWebserver() {
 	e := echo.New()
 	e.HidePort = true
 	e.HideBanner = true
+	e.Use(serverHeader)
 	e.Use(middleware.CORS())
 	e.GET("/api/status", getStatus)
 	e.GET("/api/register", getDeviceToken)
@@ -32,6 +33,15 @@ func startWebserver() {
 	e.Static("/", "static")
 	log.Println("[webapi] started http server on " + webserverEndpoint)
 	e.Logger.Fatal(e.Start(webserverEndpoint))
+}
+
+func serverHeader(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		c.Response().Header().Set(echo.HeaderXFrameOptions, "sameorigin")
+		c.Response().Header().Set(echo.HeaderXContentTypeOptions, "nosniff")
+		c.Response().Header().Set(echo.HeaderXXSSProtection, "1")
+		return next(c)
+	}
 }
 
 func checkAuthorization(c echo.Context) bool {
