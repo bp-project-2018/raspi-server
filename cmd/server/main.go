@@ -10,11 +10,13 @@ import (
 
 	"github.com/iot-bp-project-2018/raspi-server/internal/commproto"
 	"github.com/iot-bp-project-2018/raspi-server/internal/mqttclient"
+	"github.com/iot-bp-project-2018/raspi-server/internal/testbuilder"
 	log "github.com/sirupsen/logrus"
 )
 
 var (
 	mqttFlag    = flag.String("mqtt", "tcp://localhost:1883", "MQTT broker URI (format is scheme://host:port)")
+	testFlag    = flag.String("test", "", "Test server against a certain kind of attack (manipulation, delay, impersonation, injection, duplication)")
 	verboseFlag = flag.Bool("verbose", false, "enable detailed logging")
 )
 
@@ -37,14 +39,25 @@ func main() {
 		log.SetLevel(log.DebugLevel)
 	}
 
+	err := testbuilder.ValidateMode(*testFlag)
+	if err != nil {
+		log.Println(err)
+		os.Exit(1)
+	}
+
 	os.MkdirAll(configDirectory, 0755)
 
 	config, err := commproto.ParseConfiguration(networkFile)
 	if err != nil {
-		log.Panicln(err)
+		log.Println(err)
+		os.Exit(1)
 	}
 
 	ps := mqttclient.NewMQTTClientWithServer(*mqttFlag)
+	if *testFlag != "" {
+		ps = testbuilder.Wrap(ps, *testFlag)
+	}
+
 	client := commproto.NewClient(config, ps)
 	client.RegisterCallback(sensorDataHandler)
 	client.Start()

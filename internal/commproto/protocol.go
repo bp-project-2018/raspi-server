@@ -195,7 +195,7 @@ func (client *Client) Send(receiver string, data []byte) error {
 		client.lastSentTimestampMutex.Unlock()
 	}
 
-	iv, err := generateSecureRandomByteArray(IVSize)
+	iv, err := GenerateSecureRandomByteArray(IVSize)
 	if err != nil {
 		return fmt.Errorf("failed to generate iv: %v", err)
 	}
@@ -275,7 +275,7 @@ func (client *timeClient) onTimeResponse(channel string, response []byte) {
 }
 
 func (client *timeClient) publishRequest() {
-	nonce, err := generateSecureRandomByteArray(NonceSize)
+	nonce, err := GenerateSecureRandomByteArray(NonceSize)
 	if err != nil {
 		log.WithFields(log.Fields{"addr": client.serverAddress, "err": err}).Warn("Time client failed to generate nonce")
 		return
@@ -317,7 +317,7 @@ func (client *timeClient) getTime() (timestamp int64, err error) {
 	return
 }
 
-func generateSecureRandomByteArray(length int) ([]byte, error) {
+func GenerateSecureRandomByteArray(length int) ([]byte, error) {
 	result := make([]byte, length)
 	_, err := rand.Read(result)
 	if err != nil {
