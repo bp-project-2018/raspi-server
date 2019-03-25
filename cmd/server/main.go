@@ -14,6 +14,7 @@ import (
 )
 
 var (
+	mqttFlag    = flag.String("mqtt", "tcp://localhost:1883", "MQTT broker URI (format is scheme://host:port)")
 	verboseFlag = flag.Bool("verbose", false, "enable detailed logging")
 )
 
@@ -43,7 +44,7 @@ func main() {
 		log.Panicln(err)
 	}
 
-	ps := mqttclient.NewMQTTClientWithServer(mqttEndpoint)
+	ps := mqttclient.NewMQTTClientWithServer(*mqttFlag)
 	client := commproto.NewClient(config, ps)
 	client.RegisterCallback(sensorDataHandler)
 	client.Start()
