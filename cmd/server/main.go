@@ -39,10 +39,12 @@ func main() {
 		log.SetLevel(log.DebugLevel)
 	}
 
-	err := testbuilder.ValidateMode(*testFlag)
-	if err != nil {
-		log.Println(err)
-		os.Exit(1)
+	if *testFlag != "" {
+		err := testbuilder.ValidateMode(*testFlag)
+		if err != nil {
+			log.Println(err)
+			os.Exit(1)
+		}
 	}
 
 	os.MkdirAll(configDirectory, 0755)
